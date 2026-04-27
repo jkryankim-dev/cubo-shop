@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { CuboLogo } from "@/components/shop/logo";
+
 export default function AuthLayout({
   children,
 }: {
@@ -9,11 +11,8 @@ export default function AuthLayout({
     <div className="flex flex-1 flex-col bg-muted/30">
       <header className="border-b border-border bg-background">
         <div className="mx-auto flex h-16 max-w-3xl items-center px-4 sm:px-6">
-          <Link
-            href="/"
-            className="text-2xl font-extrabold tracking-tight text-brand-pink"
-          >
-            CUBO
+          <Link href="/" aria-label="CUBO Shop 홈으로">
+            <CuboLogo />
           </Link>
         </div>
       </header>

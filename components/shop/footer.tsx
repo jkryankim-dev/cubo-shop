@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { CuboLogo } from "@/components/shop/logo";
+
 // 사업자 정보 — 실제 값은 .env 또는 별도 설정으로 분리 예정.
 // 지금은 하드코딩 placeholder. 운영 전 반드시 실제 값으로 채워야 함.
 const BUSINESS_INFO = {
@@ -18,11 +20,9 @@ export function Footer() {
       <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
         <div className="grid gap-8 md:grid-cols-3">
           <div>
-            <p className="text-xl font-extrabold tracking-tight text-brand-pink">
-              CUBO
-            </p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              인형뽑기 매장에서 만나는 진짜 굿즈를 온라인으로.
+            <CuboLogo className="h-7 w-14" />
+            <p className="mt-3 text-sm text-muted-foreground">
+              인형뽑기 매장 사장님을 위한 굿즈 도매.
             </p>
           </div>
 

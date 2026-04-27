@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 import { RequireAuth } from "@/components/auth/require-auth";
 import { Button } from "@/components/ui/button";
+import { CuboLogo } from "@/components/shop/logo";
 import { useAuth } from "@/components/auth/auth-provider";
 import { signOut } from "@/lib/auth";
 import { cn } from "@/lib/utils";
@@ -28,8 +29,15 @@ export default function AdminLayout({
         <header className="border-b border-border bg-foreground text-background">
           <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
             <div className="flex items-center gap-6">
-              <Link href="/admin" className="text-sm font-bold tracking-wide">
-                CUBO Admin
+              <Link
+                href="/admin"
+                aria-label="CUBO Admin"
+                className="flex items-center gap-2"
+              >
+                <CuboLogo color="bg-background" className="h-6 w-12" />
+                <span className="text-xs font-medium tracking-wider opacity-70">
+                  ADMIN
+                </span>
               </Link>
               <nav className="flex gap-1">
                 {NAV.map((item) => {
