@@ -18,8 +18,11 @@
   # Next.js 가 클라이언트 번들에 포함하지 않음 (서버 전용). 변수명에 KEY 가 들어가
   # 스캐너가 의심하므로 명시적으로 omit.
   SECRETS_SCAN_OMIT_KEYS = "NEXT_PUBLIC_FIREBASE_API_KEY,NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,NEXT_PUBLIC_FIREBASE_PROJECT_ID,NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,NEXT_PUBLIC_FIREBASE_APP_ID,FIREBASE_ADMIN_PRIVATE_KEY"
-  # placeholder 값/짧은 문자열 등 명백한 비-시크릿은 스마트 감지로 자동 제외
-  SECRETS_SCAN_SMART_DETECTION_ENABLED = "true"
+  # Smart Detection 은 환경변수 값의 "패턴" (예: Google API key 형식 AIza...) 을
+  # 보고 자동으로 secret 으로 추정하는 기능. NEXT_PUBLIC_FIREBASE_API_KEY 처럼
+  # 의도적으로 클라이언트에 노출되는 값까지 잡아 false-positive 발생.
+  # OMIT_KEYS (위) 로 충분히 보호되므로 비활성화.
+  SECRETS_SCAN_SMART_DETECTION_ENABLED = "false"
 
 # Next.js 공식 플러그인 (Netlify 가 자동 설치하지만 명시)
 [[plugins]]
