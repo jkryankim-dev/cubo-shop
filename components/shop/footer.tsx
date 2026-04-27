@@ -2,21 +2,21 @@ import Link from "next/link";
 
 import { CuboLogo } from "@/components/shop/logo";
 
-// 사업자 정보 — .env 의 NEXT_PUBLIC_BUSINESS_* 에서 읽음.
-// 값이 비어있으면 placeholder 표시.
+// 사업자 정보 — .env 의 NEXT_PUBLIC_BUSINESS_* 로 override 가능.
+// fallback 값은 통신판매업신고증 (제2025-충남천안-1814호) 기준.
 const BUSINESS_INFO = {
-  name: process.env.NEXT_PUBLIC_BUSINESS_NAME || "(주) 큐보",
-  ceo: process.env.NEXT_PUBLIC_BUSINESS_CEO || "대표자명",
+  name: process.env.NEXT_PUBLIC_BUSINESS_NAME || "주식회사 쿠보",
+  ceo: process.env.NEXT_PUBLIC_BUSINESS_CEO || "조원희",
   registrationNumber:
-    process.env.NEXT_PUBLIC_BUSINESS_REG_NO || "000-00-00000",
+    process.env.NEXT_PUBLIC_BUSINESS_REG_NO || "사업자등록번호 등록 예정",
   mailOrderNumber:
     process.env.NEXT_PUBLIC_BUSINESS_MAIL_ORDER_NO ||
-    "제0000-서울XX-0000호",
+    "제2025-충남천안-1814호",
   address:
     process.env.NEXT_PUBLIC_BUSINESS_ADDRESS ||
-    "서울특별시 ○○구 ○○로 00",
-  phone: process.env.NEXT_PUBLIC_BUSINESS_PHONE || "02-0000-0000",
-  email: process.env.NEXT_PUBLIC_BUSINESS_EMAIL || "shop@cubo.example",
+    "충청남도 천안시 동남구 통정9로 36, 204호 (신방동)",
+  phone: process.env.NEXT_PUBLIC_BUSINESS_PHONE || "전화번호 등록 예정",
+  email: process.env.NEXT_PUBLIC_BUSINESS_EMAIL || "이메일 등록 예정",
 } as const;
 
 export function Footer() {
