@@ -22,7 +22,7 @@ export function Footer() {
           <div>
             <CuboLogo className="h-7 w-14" />
             <p className="mt-3 text-sm text-muted-foreground">
-              인형뽑기 매장 사장님을 위한 굿즈 도매.
+              피규어ㆍ가방ㆍ봉제인형 등 온라인 도매몰.
             </p>
           </div>
 

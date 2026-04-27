@@ -11,17 +11,17 @@ export default function HomePage() {
         <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6 md:py-28">
           <div className="max-w-2xl">
             <p className="text-sm font-semibold uppercase tracking-widest text-brand-pink">
-              인형뽑기 매장 굿즈 도매
+              인형뽑기 전문 도매샵
             </p>
             <h1 className="mt-3 text-4xl font-extrabold leading-tight tracking-tight md:text-5xl">
-              매장에서 검증된 굿즈,
+              피규어, 가방, 봉제인형 등
               <br />
-              <span className="text-brand-pink">도매가로 채워보세요.</span>
+              <span className="text-brand-pink">온라인 도매몰.</span>
             </h1>
             <p className="mt-5 text-base leading-7 text-foreground/80 md:text-lg">
-              CUBO 매장에서 실제로 잘 나가는 인기 굿즈를 사장님들께
-              합리적인 도매가로 공급합니다. 사업자등록증만 등록하시면
-              사업자 회원 단가가 적용됩니다.
+              인형뽑기 매장에 필요한 인기 라인업을 한 곳에서 도매가로
+              공급합니다. 사업자등록증만 등록하시면 사업자 회원 단가가
+              자동 적용됩니다.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Link href="/products">
@@ -44,8 +44,8 @@ export default function HomePage() {
         <div className="mt-8 grid gap-4 md:grid-cols-3">
           <Feature
             icon={<Boxes className="size-5 text-brand-pink" />}
-            title="매장 검증 인기 굿즈"
-            body="실제 CUBO 매장에서 회전이 빠른 상품만 엄선해 공급합니다."
+            title="피규어부터 봉제인형까지"
+            body="피규어, 가방, 키링, 봉제인형 등 매장에 필요한 카테고리를 한 곳에서."
           />
           <Feature
             icon={<Truck className="size-5 text-brand-pink" />}

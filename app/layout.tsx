@@ -15,11 +15,11 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "CUBO Shop — 인형뽑기 매장 굿즈 도매",
+    default: "CUBO Shop — 피규어, 가방, 봉제인형 등 온라인 도매몰",
     template: "%s | CUBO Shop",
   },
   description:
-    "인형뽑기 매장 사장님을 위한 굿즈 도매 쇼핑몰. 매장 검증 인기상품을 합리적인 도매가로.",
+    "피규어, 가방, 봉제인형 등 인형뽑기 매장에 필요한 인기 캐릭터 상품을 도매가로 공급합니다. 사업자 회원 도매 단가 자동 적용.",
 };
 
 export default function RootLayout({
