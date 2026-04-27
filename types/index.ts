@@ -21,9 +21,12 @@ export interface Product {
   priceCOST?: number;
   /** 재고 수량. 결제 확정 시 트랜잭션으로 차감됨 */
   stock: number;
-  /** 대표 이미지 URL 또는 URL 배열 */
+  /** 대표 이미지 URL */
   image?: string;
+  /** 갤러리 이미지 (썸네일·옵션 컷용) */
   images?: string[];
+  /** 상품 상세 페이지에 세로로 펼쳐 보여줄 긴 이미지들 (ERP 가 업로드) */
+  detailImages?: string[];
   category?: string;
   tags?: string[];
   description?: string;
@@ -38,17 +41,65 @@ export interface Product {
 }
 
 // ---------------------------------------------------------------------
-// ShopCustomer — 쇼핑몰 일반 고객 (Firebase Auth uid 기준)
+// ShopCustomer — 쇼핑몰 회원 (Firebase Auth uid 기준)
 // 컬렉션: shop_customers/{uid}
+//
+// 가입 흐름: 한국형 ID/PW 가입 → Firebase Auth 는 가짜 이메일
+//   (`${loginId}@cubo.shop.local`) 로 등록, 실제 정보는 여기 저장.
 // ---------------------------------------------------------------------
+export type CustomerGrade =
+  | "general" // 일반 회원
+  | "business"; // 사업자 회원 (사업자등록증 검증 완료)
+
 export interface ShopCustomer {
   uid: string;
+  /** 로그인용 ID (영문/숫자, 4-12자) */
+  loginId: string;
+  /** 가짜 이메일 (Firebase Auth 식별자, `${loginId}@cubo.shop.local`) */
+  authEmail: string;
+  /** 사용자가 입력한 실제 이메일 */
   email: string;
-  displayName?: string;
-  phone?: string;
+  /** 성함 */
+  name: string;
+  /** 휴대폰번호 (본인인증 SDK 추후) */
+  phone: string;
+  /** 본인인증 완료 여부 */
+  phoneVerified?: boolean;
+  /** 기본 주소 */
   defaultAddress?: ShippingAddress;
+  /** 사업자등록증 (가입 후 업로드 가능) */
+  businessLicense?: BusinessLicense;
+  /** 회원 등급 */
+  grade: CustomerGrade;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
+}
+
+export interface BusinessLicense {
+  /** Firebase Storage 다운로드 URL */
+  url: string;
+  /** Storage 경로 (path) — 삭제·재업로드용 */
+  storagePath: string;
+  /** 검증 상태 */
+  status: "pending" | "approved" | "rejected";
+  uploadedAt?: Timestamp;
+  reviewedAt?: Timestamp;
+  reviewerUid?: string;
+  rejectionReason?: string;
+}
+
+// ---------------------------------------------------------------------
+// ShippingAddress — 한국형 주소 (다음 우편번호 SDK 와 호환)
+// ---------------------------------------------------------------------
+export interface ShippingAddress {
+  recipient: string;
+  phone: string;
+  postcode: string;
+  /** 도로명 또는 지번 주소 */
+  address1: string;
+  /** 상세 주소 */
+  address2?: string;
+  memo?: string;
 }
 
 // ---------------------------------------------------------------------
@@ -69,15 +120,7 @@ export interface ShopOrderItem {
   name: string;
   unitPrice: number;
   quantity: number;
-}
-
-export interface ShippingAddress {
-  recipient: string;
-  phone: string;
-  postcode: string;
-  address1: string;
-  address2?: string;
-  memo?: string;
+  image?: string;
 }
 
 export interface ShopOrder {
@@ -98,7 +141,7 @@ export interface ShopOrder {
 }
 
 // ---------------------------------------------------------------------
-// ShopCart — 장바구니 (선택, localStorage 우선)
+// ShopCart — 장바구니 (localStorage 우선, 로그인 시 동기화)
 // 컬렉션: shop_carts/{uid}
 // ---------------------------------------------------------------------
 export interface ShopCartItem {
@@ -110,4 +153,41 @@ export interface ShopCart {
   uid: string;
   items: ShopCartItem[];
   updatedAt?: Timestamp;
+}
+
+// ---------------------------------------------------------------------
+// ShopAdmin — 쇼핑몰 관리자
+// 컬렉션: shop_admins/{uid}
+//
+// 사용자 본인 uid 를 한 번 콘솔에서 등록하면 끝. 추가 admin 도 같은 방식.
+// ---------------------------------------------------------------------
+export interface ShopAdmin {
+  uid: string;
+  email?: string;
+  displayName?: string;
+  /** 권한 (추후 세분화 가능) */
+  role: "owner" | "admin";
+  createdAt?: Timestamp;
+}
+
+// ---------------------------------------------------------------------
+// ShopListing — 관리자가 큐레이션한 상품 노출 정보
+// 컬렉션: shop_listings/{productId}
+//
+// productId 는 ERP `products` 의 docId 와 동일.
+// published === true 인 항목만 쇼핑몰에 표시.
+// ---------------------------------------------------------------------
+export interface ShopListing {
+  productId: string;
+  published: boolean;
+  /** 정렬 순서 (작은 값이 먼저) */
+  order?: number;
+  /** 메인 추천 노출 */
+  featured?: boolean;
+  /** 노출 시작 시각 */
+  listedAt?: Timestamp;
+  /** 노출 등록한 관리자 uid */
+  listedBy?: string;
+  /** 비공개 처리 사유 (관리자 메모) */
+  unpublishReason?: string;
 }

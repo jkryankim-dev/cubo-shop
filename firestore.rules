@@ -1,0 +1,73 @@
+// =====================================================================
+// Firestore Rules — CUBO Shop (cubo-shop 전용)
+//
+// 중요: 이 룰은 cubo-shop 이 소유하는 컬렉션 (`shop_*`) 에만 적용됩니다.
+// ERP 가 소유하는 컬렉션 (`products`, `orders`, `users`, `entities` 등) 의
+// 룰은 cuboerp 세션에서 별도로 관리됩니다.
+//
+// 배포 방법: Firebase 콘솔 → Firestore → Rules 탭에 ERP 룰과 병합해서 배포.
+// (cuboerp 세션의 Claude 와 협의하여 한 파일로 합쳐야 함)
+// =====================================================================
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // -------- 공통 헬퍼 --------
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/shop_admins/$(request.auth.uid));
+    }
+
+    // -------- shop_customers/{uid} --------
+    // 본인 문서만 본인이 읽기·생성·수정. 관리자는 모든 문서 읽기 (검토용).
+    // 삭제는 운영자가 콘솔에서.
+    match /shop_customers/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow create: if isOwner(uid);
+      allow update: if isOwner(uid) || isAdmin();
+      allow delete: if false;
+    }
+
+    // -------- shop_orders/{orderId} --------
+    // 주문은 본인만 자기 주문 조회. 생성은 결제 콜백 (서버 SDK) 에서.
+    // 클라이언트의 직접 생성은 금지 (Admin SDK 만).
+    match /shop_orders/{orderId} {
+      allow read: if isAdmin() ||
+                     (isSignedIn() && resource.data.customerUid == request.auth.uid);
+      allow create: if false;
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+
+    // -------- shop_carts/{uid} --------
+    // 본인 장바구니만 읽기·쓰기.
+    match /shop_carts/{uid} {
+      allow read, write: if isOwner(uid);
+    }
+
+    // -------- shop_admins/{uid} --------
+    // 관리자 목록은 콘솔에서 직접 추가. 클라이언트 쓰기는 금지.
+    // 본인 자신의 admin 문서는 읽기 가능 (권한 체크용).
+    match /shop_admins/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow write: if false;
+    }
+
+    // -------- shop_listings/{productId} --------
+    // 누구나 읽기 (쇼핑몰 노출용). 쓰기는 관리자만.
+    match /shop_listings/{productId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // 그 외 cubo-shop 이 직접 다루지 않는 컬렉션은 ERP 룰에 의해 결정됨.
+    // 이 파일에서 별도 default 매처를 두지 않음 (ERP 룰과 병합 시 충돌 방지).
+  }
+}

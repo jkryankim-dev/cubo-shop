@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Menu, ShoppingCart, User, X } from "lucide-react";
+import { LogIn, LogOut, Menu, ShoppingCart, User, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/components/auth/auth-provider";
+import { signOut } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
@@ -15,6 +17,7 @@ const NAV_ITEMS = [
 
 export function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { user, profile, admin, loading } = useAuth();
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
@@ -37,17 +40,56 @@ export function Header() {
               {item.label}
             </Link>
           ))}
+          {admin && (
+            <Link
+              href="/admin"
+              className="text-sm font-medium text-brand-pink hover:underline"
+            >
+              관리자
+            </Link>
+          )}
         </nav>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 md:gap-2">
           <Link href="/cart" className="md:hidden" aria-label="장바구니">
             <Button variant="ghost" size="icon">
               <ShoppingCart />
             </Button>
           </Link>
-          <Link href="/login" aria-label="로그인">
+
+          {!loading && user ? (
+            <div className="hidden md:flex md:items-center md:gap-2">
+              <Link href="/mypage">
+                <Button variant="ghost" size="sm">
+                  <User className="mr-1.5" />
+                  {profile?.name ?? "마이페이지"}
+                </Button>
+              </Link>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => signOut()}
+                aria-label="로그아웃"
+              >
+                <LogOut />
+              </Button>
+            </div>
+          ) : !loading ? (
+            <div className="hidden md:flex md:items-center md:gap-1">
+              <Link href="/login">
+                <Button variant="ghost" size="sm">
+                  로그인
+                </Button>
+              </Link>
+              <Link href="/signup">
+                <Button size="sm">회원가입</Button>
+              </Link>
+            </div>
+          ) : null}
+
+          <Link href="/mypage" className="md:hidden" aria-label="마이페이지">
             <Button variant="ghost" size="icon">
-              <User />
+              {user ? <User /> : <LogIn />}
             </Button>
           </Link>
           <Button
@@ -80,6 +122,45 @@ export function Header() {
               {item.label}
             </Link>
           ))}
+          {admin && (
+            <Link
+              href="/admin"
+              className="rounded-md px-3 py-3 text-base font-medium text-brand-pink"
+              onClick={() => setMobileOpen(false)}
+            >
+              관리자
+            </Link>
+          )}
+          {!user && (
+            <>
+              <Link
+                href="/login"
+                className="rounded-md px-3 py-3 text-base font-medium"
+                onClick={() => setMobileOpen(false)}
+              >
+                로그인
+              </Link>
+              <Link
+                href="/signup"
+                className="rounded-md px-3 py-3 text-base font-medium text-brand-pink"
+                onClick={() => setMobileOpen(false)}
+              >
+                회원가입
+              </Link>
+            </>
+          )}
+          {user && (
+            <button
+              type="button"
+              className="rounded-md px-3 py-3 text-left text-base font-medium text-destructive"
+              onClick={() => {
+                setMobileOpen(false);
+                signOut();
+              }}
+            >
+              로그아웃
+            </button>
+          )}
         </nav>
       </div>
     </header>
