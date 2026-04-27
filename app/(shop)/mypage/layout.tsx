@@ -11,6 +11,8 @@ const NAV = [
   { href: "/mypage/orders", label: "주문 내역" },
   { href: "/mypage/business-license", label: "사업자등록증" },
   { href: "/mypage/addresses", label: "배송지" },
+  { href: "/mypage/password", label: "비밀번호 변경" },
+  { href: "/mypage/withdraw", label: "회원 탈퇴" },
 ];
 
 export default function MypageLayout({

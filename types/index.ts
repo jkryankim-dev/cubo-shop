@@ -71,6 +71,8 @@ export interface ShopCustomer {
   businessLicense?: BusinessLicense;
   /** 회원 등급 */
   grade: CustomerGrade;
+  /** 마케팅 알림(카카오톡) 수신 동의 */
+  marketingOptIn?: boolean;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 }

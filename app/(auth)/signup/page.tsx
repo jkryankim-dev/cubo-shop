@@ -16,6 +16,7 @@ import {
   signUp,
   uploadBusinessLicense,
 } from "@/lib/auth";
+import { formatPhone } from "@/lib/format";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -33,6 +34,9 @@ export default function SignupPage() {
   const [address2, setAddress2] = useState("");
   const [licenseFile, setLicenseFile] = useState<File | null>(null);
   const [postcodeOpen, setPostcodeOpen] = useState(false);
+  const [agreeTerms, setAgreeTerms] = useState(false);
+  const [agreePrivacy, setAgreePrivacy] = useState(false);
+  const [agreeMarketing, setAgreeMarketing] = useState(false);
 
   function handlePostcodeComplete(data: Address) {
     setPostcode(data.zonecode);
@@ -64,6 +68,10 @@ export default function SignupPage() {
       setError("주소(우편번호 + 도로명/지번) 는 필수입니다.");
       return;
     }
+    if (!agreeTerms || !agreePrivacy) {
+      setError("이용약관 및 개인정보처리방침 동의는 필수입니다.");
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -80,6 +88,7 @@ export default function SignupPage() {
           address1: address1.trim(),
           address2: address2.trim() || undefined,
         },
+        marketingOptIn: agreeMarketing,
       });
 
       if (licenseFile) {
@@ -180,14 +189,15 @@ export default function SignupPage() {
           <FormField
             label="휴대폰번호"
             required
-            hint="본인인증은 추후 추가 예정 (숫자만 입력)"
+            hint="본인인증은 추후 추가 예정"
           >
             <Input
               type="tel"
               autoComplete="tel"
               value={phone}
-              onChange={(e) => setPhone(e.target.value.replace(/[^0-9]/g, ""))}
-              placeholder="01012345678"
+              onChange={(e) => setPhone(formatPhone(e.target.value))}
+              placeholder="010-1234-5678"
+              maxLength={13}
               required
             />
           </FormField>
@@ -254,6 +264,77 @@ export default function SignupPage() {
               onChange={(e) => setLicenseFile(e.target.files?.[0] ?? null)}
             />
           </FormField>
+
+          <Separator />
+
+          <div className="space-y-2 rounded-md border border-border p-3">
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={agreeTerms && agreePrivacy && agreeMarketing}
+                onChange={(e) => {
+                  setAgreeTerms(e.target.checked);
+                  setAgreePrivacy(e.target.checked);
+                  setAgreeMarketing(e.target.checked);
+                }}
+                className="mt-1"
+              />
+              <span className="font-medium">전체 동의</span>
+            </label>
+            <Separator />
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={agreeTerms}
+                onChange={(e) => setAgreeTerms(e.target.checked)}
+                className="mt-1"
+                required
+              />
+              <span>
+                <span className="text-destructive">[필수]</span>{" "}
+                <Link
+                  href="/terms"
+                  target="_blank"
+                  className="underline-offset-2 hover:underline"
+                >
+                  이용약관
+                </Link>{" "}
+                동의
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={agreePrivacy}
+                onChange={(e) => setAgreePrivacy(e.target.checked)}
+                className="mt-1"
+                required
+              />
+              <span>
+                <span className="text-destructive">[필수]</span>{" "}
+                <Link
+                  href="/privacy"
+                  target="_blank"
+                  className="underline-offset-2 hover:underline"
+                >
+                  개인정보처리방침
+                </Link>{" "}
+                동의
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={agreeMarketing}
+                onChange={(e) => setAgreeMarketing(e.target.checked)}
+                className="mt-1"
+              />
+              <span>
+                <span className="text-muted-foreground">[선택]</span> 신상품 ·
+                할인 알림 카카오톡 수신 동의
+              </span>
+            </label>
+          </div>
 
           {error && (
             <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">

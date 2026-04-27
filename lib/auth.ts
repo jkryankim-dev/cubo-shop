@@ -8,11 +8,16 @@
 
 import {
   createUserWithEmailAndPassword,
+  deleteUser,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
   signInWithEmailAndPassword,
   signOut as fbSignOut,
+  updatePassword as fbUpdatePassword,
   type UserCredential,
 } from "firebase/auth";
 import {
+  deleteDoc,
   doc,
   getDoc,
   serverTimestamp,
@@ -46,6 +51,7 @@ export interface SignUpInput {
   email: string;
   phone: string;
   address: ShippingAddress;
+  marketingOptIn: boolean;
 }
 
 export async function signUp(input: SignUpInput): Promise<UserCredential> {
@@ -73,6 +79,7 @@ export async function signUp(input: SignUpInput): Promise<UserCredential> {
     phoneVerified: false,
     defaultAddress: input.address,
     grade: "general",
+    marketingOptIn: input.marketingOptIn,
   };
 
   await setDoc(doc(db, "shop_customers", cred.user.uid), {
@@ -139,4 +146,60 @@ export async function uploadBusinessLicense(
 export async function isShopAdmin(uid: string): Promise<boolean> {
   const snap = await getDoc(doc(db, "shop_admins", uid));
   return snap.exists();
+}
+
+// ---------------------------------------------------------------------
+// 프로필 편집 (이름·이메일·휴대폰·기본 배송지)
+// ---------------------------------------------------------------------
+export interface UpdateProfileInput {
+  name?: string;
+  email?: string;
+  phone?: string;
+  defaultAddress?: ShippingAddress;
+}
+
+export async function updateProfile(uid: string, patch: UpdateProfileInput) {
+  await updateDoc(doc(db, "shop_customers", uid), {
+    ...patch,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+// ---------------------------------------------------------------------
+// 비밀번호 변경 (현재 비밀번호로 재인증 후 변경)
+// ---------------------------------------------------------------------
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+) {
+  const user = auth.currentUser;
+  if (!user || !user.email) {
+    throw new Error("로그인 상태가 아닙니다.");
+  }
+  if (newPassword.length < 8) {
+    throw new Error("새 비밀번호는 8자 이상이어야 합니다.");
+  }
+  const credential = EmailAuthProvider.credential(user.email, currentPassword);
+  await reauthenticateWithCredential(user, credential);
+  await fbUpdatePassword(user, newPassword);
+}
+
+// ---------------------------------------------------------------------
+// 회원 탈퇴 (재인증 → Firestore 문서 삭제 → Auth 계정 삭제)
+//
+// 주의: 본 단계에서는 사업자등록증 Storage 파일은 별도로 정리 정책을 두지 않음.
+// 운영 단계에서 정책 결정 후 Cloud Functions 등으로 정리.
+// ---------------------------------------------------------------------
+export async function deleteAccount(currentPassword: string) {
+  const user = auth.currentUser;
+  if (!user || !user.email) {
+    throw new Error("로그인 상태가 아닙니다.");
+  }
+  const credential = EmailAuthProvider.credential(user.email, currentPassword);
+  await reauthenticateWithCredential(user, credential);
+
+  // Firestore 문서 삭제 먼저, 이후 Auth 계정 삭제 (둘 다 성공하지 않으면 일관성 깨질 수 있어
+  // 추후 Cloud Function 으로 atomic 보강 검토)
+  await deleteDoc(doc(db, "shop_customers", user.uid));
+  await deleteUser(user);
 }

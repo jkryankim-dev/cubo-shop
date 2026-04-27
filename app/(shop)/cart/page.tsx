@@ -1,38 +1,83 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { doc, getDoc } from "firebase/firestore";
 import { Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   getCartItems,
   removeFromCart,
   updateCartQuantity,
 } from "@/lib/cart";
+import { db } from "@/lib/firebase";
 import { formatPriceKRW } from "@/lib/format";
-import type { ShopCartItem } from "@/types";
+import type { Product, ShopCartItem } from "@/types";
+
+interface CartLine extends ShopCartItem {
+  product: Product | null;
+}
 
 export default function CartPage() {
-  const [items, setItems] = useState<ShopCartItem[]>([]);
+  const [lines, setLines] = useState<CartLine[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const refresh = useCallback(async () => {
+    const items = getCartItems();
+    if (items.length === 0) {
+      setLines([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    if (!process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID) {
+      setLines(items.map((it) => ({ ...it, product: null })));
+      setLoading(false);
+      return;
+    }
+    const fetched = await Promise.all(
+      items.map(async (it) => {
+        try {
+          const snap = await getDoc(doc(db, "products", it.productId));
+          if (!snap.exists()) return { ...it, product: null };
+          return {
+            ...it,
+            product: { id: snap.id, ...snap.data() } as Product,
+          };
+        } catch {
+          return { ...it, product: null };
+        }
+      }),
+    );
+    setLines(fetched);
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
-    const refresh = () => setItems(getCartItems());
     refresh();
     window.addEventListener("cubo-cart-changed", refresh);
     return () => window.removeEventListener("cubo-cart-changed", refresh);
-  }, []);
+  }, [refresh]);
 
-  // 가격 정보는 ERP products 와 join 해야 정확. 지금은 골격만.
-  const total = 0;
+  const total = lines.reduce(
+    (sum, l) => sum + (l.product?.priceA ?? 0) * l.quantity,
+    0,
+  );
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
       <h1 className="text-3xl font-bold tracking-tight">장바구니</h1>
 
-      {items.length === 0 ? (
+      {loading ? (
+        <div className="mt-8 space-y-3">
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-24 w-full" />
+        </div>
+      ) : lines.length === 0 ? (
         <Card className="mt-8">
           <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
             <p className="text-base font-medium">장바구니가 비어있습니다.</p>
@@ -47,41 +92,61 @@ export default function CartPage() {
       ) : (
         <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_320px]">
           <ul className="space-y-3">
-            {items.map((item) => (
-              <li key={item.productId}>
+            {lines.map((line) => (
+              <li key={line.productId}>
                 <Card>
                   <CardContent className="flex items-center gap-4 p-4">
-                    <div className="size-20 shrink-0 rounded-md bg-muted" />
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">
-                        상품 ID: {item.productId}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        상품 정보 join 은 추후 단계
-                      </p>
+                    <div className="size-20 shrink-0 overflow-hidden rounded-md bg-muted">
+                      {line.product?.image ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={line.product.image}
+                          alt={line.product.name}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : null}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      {line.product ? (
+                        <>
+                          <Link
+                            href={`/products/${line.productId}`}
+                            className="line-clamp-1 text-sm font-medium hover:underline"
+                          >
+                            {line.product.name}
+                          </Link>
+                          <p className="mt-1 text-sm font-bold text-brand-pink">
+                            {formatPriceKRW(line.product.priceA ?? 0)}
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">
+                          상품 정보 없음 ({line.productId})
+                        </p>
+                      )}
                       <div className="mt-2 flex items-center gap-2">
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() =>
                             updateCartQuantity(
-                              item.productId,
-                              item.quantity - 1,
+                              line.productId,
+                              line.quantity - 1,
                             )
                           }
                         >
                           −
                         </Button>
                         <span className="min-w-8 text-center text-sm">
-                          {item.quantity}
+                          {line.quantity}
                         </span>
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() =>
                             updateCartQuantity(
-                              item.productId,
-                              item.quantity + 1,
+                              line.productId,
+                              line.quantity + 1,
                             )
                           }
                         >
@@ -89,14 +154,22 @@ export default function CartPage() {
                         </Button>
                       </div>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => removeFromCart(item.productId)}
-                      aria-label="삭제"
-                    >
-                      <Trash2 />
-                    </Button>
+                    <div className="text-right">
+                      <p className="text-sm font-bold">
+                        {formatPriceKRW(
+                          (line.product?.priceA ?? 0) * line.quantity,
+                        )}
+                      </p>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeFromCart(line.productId)}
+                        aria-label="삭제"
+                        className="mt-1"
+                      >
+                        <Trash2 />
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
               </li>

@@ -3,8 +3,8 @@ import { cn } from "@/lib/utils";
 interface CuboLogoProps {
   className?: string;
   /**
-   * Tailwind 색상 클래스 (예: "bg-brand-pink", "bg-background", "bg-foreground").
-   * 기본은 브랜드 핑크.
+   * Tailwind 색상 클래스 (예: "bg-brand-pink", "bg-background", "bg-foreground", "bg-primary").
+   * 기본은 `bg-primary` — primary 토큰이 라이트/다크 모두 핑크라 다크모드 자동 호환.
    * 어두운 헤더 위에선 "bg-background" 처럼 밝은 색으로 호출.
    */
   color?: string;
@@ -18,7 +18,7 @@ interface CuboLogoProps {
  */
 export function CuboLogo({
   className,
-  color = "bg-brand-pink",
+  color = "bg-primary",
 }: CuboLogoProps) {
   return (
     <div

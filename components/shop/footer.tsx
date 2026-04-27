@@ -2,16 +2,21 @@ import Link from "next/link";
 
 import { CuboLogo } from "@/components/shop/logo";
 
-// 사업자 정보 — 실제 값은 .env 또는 별도 설정으로 분리 예정.
-// 지금은 하드코딩 placeholder. 운영 전 반드시 실제 값으로 채워야 함.
+// 사업자 정보 — .env 의 NEXT_PUBLIC_BUSINESS_* 에서 읽음.
+// 값이 비어있으면 placeholder 표시.
 const BUSINESS_INFO = {
-  name: "(주) 큐보",
-  ceo: "대표자명",
-  registrationNumber: "000-00-00000",
-  mailOrderNumber: "제0000-서울XX-0000호",
-  address: "서울특별시 ○○구 ○○로 00",
-  phone: "02-0000-0000",
-  email: "shop@cubo.example",
+  name: process.env.NEXT_PUBLIC_BUSINESS_NAME || "(주) 큐보",
+  ceo: process.env.NEXT_PUBLIC_BUSINESS_CEO || "대표자명",
+  registrationNumber:
+    process.env.NEXT_PUBLIC_BUSINESS_REG_NO || "000-00-00000",
+  mailOrderNumber:
+    process.env.NEXT_PUBLIC_BUSINESS_MAIL_ORDER_NO ||
+    "제0000-서울XX-0000호",
+  address:
+    process.env.NEXT_PUBLIC_BUSINESS_ADDRESS ||
+    "서울특별시 ○○구 ○○로 00",
+  phone: process.env.NEXT_PUBLIC_BUSINESS_PHONE || "02-0000-0000",
+  email: process.env.NEXT_PUBLIC_BUSINESS_EMAIL || "shop@cubo.example",
 } as const;
 
 export function Footer() {

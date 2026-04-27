@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { LogIn, LogOut, Menu, ShoppingCart, User, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { CuboLogo } from "@/components/shop/logo";
+import { ThemeToggle } from "@/components/shop/theme-toggle";
 import { useAuth } from "@/components/auth/auth-provider";
 import { signOut } from "@/lib/auth";
+import { getCartItems } from "@/lib/cart";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
@@ -18,7 +20,22 @@ const NAV_ITEMS = [
 
 export function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [cartCount, setCartCount] = useState(0);
   const { user, profile, admin, loading } = useAuth();
+
+  useEffect(() => {
+    const update = () => {
+      const total = getCartItems().reduce((sum, it) => sum + it.quantity, 0);
+      setCartCount(total);
+    };
+    update();
+    window.addEventListener("cubo-cart-changed", update);
+    window.addEventListener("storage", update);
+    return () => {
+      window.removeEventListener("cubo-cart-changed", update);
+      window.removeEventListener("storage", update);
+    };
+  }, []);
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
@@ -48,10 +65,16 @@ export function Header() {
         </nav>
 
         <div className="flex items-center gap-1 md:gap-2">
-          <Link href="/cart" className="md:hidden" aria-label="장바구니">
+          <ThemeToggle />
+          <Link href="/cart" className="relative" aria-label="장바구니">
             <Button variant="ghost" size="icon">
               <ShoppingCart />
             </Button>
+            {cartCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-brand-pink px-1 text-xs font-bold leading-none text-primary-foreground">
+                {cartCount > 99 ? "99+" : cartCount}
+              </span>
+            )}
           </Link>
 
           {!loading && user ? (
