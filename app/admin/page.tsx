@@ -35,15 +35,19 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
 
-        <Card className="opacity-60">
-          <CardHeader>
-            <CardTitle className="text-base">사업자 회원 검토</CardTitle>
-            <CardDescription>(추후 단계)</CardDescription>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
-            사업자등록증 검토 → 승급 처리
-          </CardContent>
-        </Card>
+        <Link href="/admin/customers">
+          <Card className="transition-shadow hover:shadow-md">
+            <CardHeader>
+              <CardTitle className="text-base">사업자 회원 검토</CardTitle>
+              <CardDescription>
+                사업자등록증 업로드 회원 → 승급/반려 처리
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="text-sm text-muted-foreground">
+              승인 시 회원 등급이 사업자로 자동 변경됩니다
+            </CardContent>
+          </Card>
+        </Link>
       </div>
     </div>
   );

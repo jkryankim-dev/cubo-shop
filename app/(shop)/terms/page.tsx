@@ -1,3 +1,9 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "이용약관",
+};
+
 export default function TermsPage() {
   return (
     <article className="prose prose-sm mx-auto max-w-3xl px-4 py-10 sm:px-6 dark:prose-invert">

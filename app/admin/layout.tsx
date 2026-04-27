@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 const NAV = [
   { href: "/admin", label: "대시보드" },
   { href: "/admin/listings", label: "상품 노출 관리" },
+  { href: "/admin/customers", label: "사업자 회원 검토" },
 ];
 
 export default function AdminLayout({
