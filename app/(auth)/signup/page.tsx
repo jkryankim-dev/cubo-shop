@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { FirebaseError } from "firebase/app";
+import DaumPostcode, { type Address } from "react-daum-postcode";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,6 +32,13 @@ export default function SignupPage() {
   const [address1, setAddress1] = useState("");
   const [address2, setAddress2] = useState("");
   const [licenseFile, setLicenseFile] = useState<File | null>(null);
+  const [postcodeOpen, setPostcodeOpen] = useState(false);
+
+  function handlePostcodeComplete(data: Address) {
+    setPostcode(data.zonecode);
+    setAddress1(data.roadAddress || data.jibunAddress);
+    setPostcodeOpen(false);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -199,20 +207,31 @@ export default function SignupPage() {
                 }
                 placeholder="우편번호"
                 className="max-w-[140px]"
+                readOnly
                 required
               />
-              <Button type="button" variant="outline" size="default" disabled>
-                우편번호 검색
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setPostcodeOpen((v) => !v)}
+              >
+                {postcodeOpen ? "닫기" : "우편번호 검색"}
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground">
-              우편번호 검색 SDK 는 추후 연동 예정 — 지금은 직접 입력해주세요.
-            </p>
+            {postcodeOpen && (
+              <div className="overflow-hidden rounded-md border border-border">
+                <DaumPostcode
+                  onComplete={handlePostcodeComplete}
+                  style={{ height: 400 }}
+                />
+              </div>
+            )}
             <Input
               type="text"
               value={address1}
               onChange={(e) => setAddress1(e.target.value)}
               placeholder="도로명/지번 주소"
+              readOnly
               required
             />
             <Input
