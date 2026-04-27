@@ -15,8 +15,8 @@ const BUSINESS_INFO = {
   address:
     process.env.NEXT_PUBLIC_BUSINESS_ADDRESS ||
     "충청남도 천안시 동남구 통정9로 36, 204호 (신방동)",
-  phone: process.env.NEXT_PUBLIC_BUSINESS_PHONE || "전화번호 등록 예정",
-  email: process.env.NEXT_PUBLIC_BUSINESS_EMAIL || "이메일 등록 예정",
+  phone: process.env.NEXT_PUBLIC_BUSINESS_PHONE || "010-4557-4183",
+  email: process.env.NEXT_PUBLIC_BUSINESS_EMAIL || "jkryankim@gmail.com",
 } as const;
 
 export function Footer() {
