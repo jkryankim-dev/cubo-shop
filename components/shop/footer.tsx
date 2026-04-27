@@ -8,7 +8,7 @@ const BUSINESS_INFO = {
   name: process.env.NEXT_PUBLIC_BUSINESS_NAME || "주식회사 쿠보",
   ceo: process.env.NEXT_PUBLIC_BUSINESS_CEO || "조원희",
   registrationNumber:
-    process.env.NEXT_PUBLIC_BUSINESS_REG_NO || "사업자등록번호 등록 예정",
+    process.env.NEXT_PUBLIC_BUSINESS_REG_NO || "775-87-03290",
   mailOrderNumber:
     process.env.NEXT_PUBLIC_BUSINESS_MAIL_ORDER_NO ||
     "제2025-충남천안-1814호",
