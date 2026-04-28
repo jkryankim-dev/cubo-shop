@@ -68,6 +68,8 @@ export interface ShopCustomer {
   /** 사용자가 입력한 실제 이메일 */
   email: string;
   name: string;
+  /** 사업자 회원 상호 (ERP 의 거래처 표시명으로 사용 — taxInvoiceInfo.companyName 과 별도) */
+  companyName?: string;
   phone: string;
   phoneVerified?: boolean;
   defaultAddress?: ShippingAddress;
@@ -145,9 +147,12 @@ export type ShopOrderStatus =
 
 export interface ShopOrderItem {
   productId: string;
+  /** 상품명 스냅샷 (ERP productName 과 매핑) */
   name: string;
   unitPrice: number;
   quantity: number;
+  /** unitPrice * quantity (스냅샷, 부가세 포함가) */
+  totalPrice: number;
   image?: string;
 }
 
@@ -160,6 +165,10 @@ export interface ShopOrder {
   customerCompany?: string;
   /** 주문자 등급 (스냅샷) */
   customerGrade?: "general" | "business";
+  /** 주문자 휴대폰 (스냅샷) */
+  customerPhone: string;
+  /** 주문자 이메일 (스냅샷) */
+  customerEmail: string;
   items: ShopOrderItem[];
   totalAmount: number;
   status: ShopOrderStatus;

@@ -20,6 +20,7 @@ export default function MypageHomePage() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState("");
+  const [companyName, setCompanyName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [postcode, setPostcode] = useState("");
@@ -30,6 +31,7 @@ export default function MypageHomePage() {
   useEffect(() => {
     if (!profile) return;
     setName(profile.name);
+    setCompanyName(profile.companyName ?? "");
     setEmail(profile.email);
     setPhone(profile.phone);
     setPostcode(profile.defaultAddress?.postcode ?? "");
@@ -55,6 +57,7 @@ export default function MypageHomePage() {
     try {
       await updateProfile(user.uid, {
         name: name.trim(),
+        companyName: companyName.trim() || undefined,
         email: email.trim(),
         phone: phone.trim(),
         defaultAddress: postcode.trim()
@@ -107,6 +110,9 @@ export default function MypageHomePage() {
             <dl className="space-y-3 text-sm">
               <Row label="아이디" value={profile.loginId} />
               <Row label="성함" value={profile.name} />
+              {profile.companyName && (
+                <Row label="상호" value={profile.companyName} />
+              )}
               <Row label="이메일" value={profile.email} />
               <Row label="휴대폰번호" value={profile.phone} />
               <Row
@@ -158,6 +164,20 @@ export default function MypageHomePage() {
         <div className="space-y-1.5">
           <Label>성함</Label>
           <Input value={name} onChange={(e) => setName(e.target.value)} />
+        </div>
+        <div className="space-y-1.5">
+          <Label>
+            상호 {profile.grade === "business" && <span className="text-destructive">*</span>}
+          </Label>
+          <Input
+            value={companyName}
+            onChange={(e) => setCompanyName(e.target.value)}
+            placeholder={
+              profile.grade === "business"
+                ? "사업자 회원 상호 (필수)"
+                : "(선택) 사업자 회원이면 입력"
+            }
+          />
         </div>
         <div className="space-y-1.5">
           <Label>이메일</Label>

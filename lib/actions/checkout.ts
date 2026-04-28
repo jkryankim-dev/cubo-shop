@@ -70,7 +70,10 @@ export async function createPendingOrderAction(
     return { success: false, message: "회원 정보를 찾을 수 없습니다." };
   const customer = customerSnap.data() as {
     name?: string;
+    companyName?: string;
     grade?: "general" | "business";
+    phone?: string;
+    email?: string;
     businessLicense?: { status?: string };
   };
 
@@ -106,12 +109,14 @@ export async function createPendingOrderAction(
         stock: FieldValue.increment(-it.quantity),
       });
       const unitPrice = product.priceA ?? product.defaultPrice ?? 0;
-      totalAmount += unitPrice * it.quantity;
+      const lineTotal = unitPrice * it.quantity;
+      totalAmount += lineTotal;
       orderItems.push({
         productId: it.productId,
         name: product.name,
         unitPrice,
         quantity: it.quantity,
+        totalPrice: lineTotal,
         image: product.imageUrl,
       });
     }
@@ -124,8 +129,11 @@ export async function createPendingOrderAction(
       customerUid: uid,
       customerName: customer.name ?? "",
       customerCompany:
-        customer.grade === "business" ? customer.name : undefined,
+        customer.companyName ??
+        (customer.grade === "business" ? customer.name : undefined),
       customerGrade: customer.grade,
+      customerPhone: customer.phone ?? "",
+      customerEmail: customer.email ?? "",
       items: orderItems,
       totalAmount,
       status: "pending",
@@ -221,7 +229,33 @@ export async function confirmPaymentAction(
     updatedAt: FieldValue.serverTimestamp(),
   });
 
+  // ERP 동기화 webhook (실패해도 결제 결과에는 영향 X)
+  await notifyErpOrderSync().catch((err) =>
+    console.warn("[erp-sync] 호출 실패 — ERP cron 으로 자동 복구됩니다.", err),
+  );
+
   return { success: true, message: "결제 확정되었습니다." };
+}
+
+/**
+ * ERP 의 shop-orders sync 엔드포인트 호출 (best-effort).
+ * cubopartners.co.kr 의 /api/shop-orders/sync 가 인증 키를 받아
+ * 신규 paid 주문을 ERP entity / orders / tax_invoices 로 미러링합니다.
+ */
+async function notifyErpOrderSync(): Promise<void> {
+  const url = process.env.ERP_SYNC_URL;
+  const secret = process.env.ERP_CRON_SECRET;
+  if (!url || !secret) return; // 미설정 시 조용히 skip
+  await fetch(`${url}?key=${encodeURIComponent(secret)}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${secret}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ source: "cubo-shop", trigger: "payment-confirm" }),
+    // 5초 타임아웃 — Next.js Server Action 의 응답 지연을 막음
+    signal: AbortSignal.timeout(5000),
+  });
 }
 
 // ---------------------------------------------------------------------

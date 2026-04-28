@@ -170,6 +170,7 @@ export async function isShopAdmin(uid: string): Promise<boolean> {
 // ---------------------------------------------------------------------
 export interface UpdateProfileInput {
   name?: string;
+  companyName?: string;
   email?: string;
   phone?: string;
   defaultAddress?: ShippingAddress;
