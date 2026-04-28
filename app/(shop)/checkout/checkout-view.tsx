@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { doc, getDoc } from "firebase/firestore";
-import { ANONYMOUS, loadTossPayments } from "@tosspayments/tosspayments-sdk";
 import DaumPostcode, { type Address } from "react-daum-postcode";
 import { toast } from "sonner";
 
@@ -214,6 +213,10 @@ export default function CheckoutView() {
         return;
       }
 
+      // 토스 SDK 는 client 에서만 로드 (SSR 시 모듈 로드 회피)
+      const { ANONYMOUS, loadTossPayments } = await import(
+        "@tosspayments/tosspayments-sdk"
+      );
       const toss = await loadTossPayments(TOSS_CLIENT_KEY);
       const payment = toss.payment({ customerKey: ANONYMOUS });
       await payment.requestPayment({
