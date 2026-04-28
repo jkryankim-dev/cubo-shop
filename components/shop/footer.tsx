@@ -3,19 +3,21 @@ import Link from "next/link";
 import { CuboLogo } from "@/components/shop/logo";
 
 // 사업자 정보 — .env 의 NEXT_PUBLIC_BUSINESS_* 로 override 가능.
-// 발행 주체는 "쿠보유통". 통신판매업번호만 주식회사 쿠보 명의 그대로 유지.
+// 발행 주체: 쿠보유통 (사업자등록번호 170-85-03147).
+// 통신판매업번호만 주식회사 쿠보 명의 그대로 유지.
 const BUSINESS_INFO = {
   name: process.env.NEXT_PUBLIC_BUSINESS_NAME || "쿠보유통",
-  ceo: process.env.NEXT_PUBLIC_BUSINESS_CEO || "대표자명 등록 예정",
+  ceo: process.env.NEXT_PUBLIC_BUSINESS_CEO || "조원희",
   registrationNumber:
-    process.env.NEXT_PUBLIC_BUSINESS_REG_NO || "사업자등록번호 등록 예정",
+    process.env.NEXT_PUBLIC_BUSINESS_REG_NO || "170-85-03147",
   mailOrderNumber:
     process.env.NEXT_PUBLIC_BUSINESS_MAIL_ORDER_NO ||
     "제2025-충남천안-1814호",
   address:
-    process.env.NEXT_PUBLIC_BUSINESS_ADDRESS || "주소 등록 예정",
-  phone: process.env.NEXT_PUBLIC_BUSINESS_PHONE || "전화번호 등록 예정",
-  email: process.env.NEXT_PUBLIC_BUSINESS_EMAIL || "이메일 등록 예정",
+    process.env.NEXT_PUBLIC_BUSINESS_ADDRESS ||
+    "충청남도 천안시 동남구 서부대로 111",
+  phone: process.env.NEXT_PUBLIC_BUSINESS_PHONE || "010-4557-4183",
+  email: process.env.NEXT_PUBLIC_BUSINESS_EMAIL || "jkryankim@gmail.com",
 } as const;
 
 export function Footer() {
