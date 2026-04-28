@@ -244,7 +244,7 @@ export async function confirmPaymentAction(
  */
 async function notifyErpOrderSync(): Promise<void> {
   const url = process.env.ERP_SYNC_URL;
-  const secret = process.env.ERP_CRON_SECRET;
+  const secret = process.env.ERP_SYNC_SECRET;
   if (!url || !secret) return; // 미설정 시 조용히 skip
   await fetch(`${url}?key=${encodeURIComponent(secret)}`, {
     method: "POST",
