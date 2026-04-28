@@ -15,9 +15,17 @@ import { Separator } from "@/components/ui/separator";
 import {
   LOGIN_ID_PATTERN,
   signUp,
+  updateTaxInvoiceInfo,
   uploadBusinessLicense,
 } from "@/lib/auth";
 import { formatPhone } from "@/lib/format";
+import {
+  EMPTY_TAX_INVOICE,
+  isTaxInvoiceFilled,
+  TaxInvoiceForm,
+  toTaxInvoiceInfo,
+  type TaxInvoiceFormValue,
+} from "@/components/shop/tax-invoice-form";
 
 export default function SignupForm() {
   const router = useRouter();
@@ -35,6 +43,8 @@ export default function SignupForm() {
   const [address2, setAddress2] = useState("");
   const [licenseFile, setLicenseFile] = useState<File | null>(null);
   const [postcodeOpen, setPostcodeOpen] = useState(false);
+  const [taxOpen, setTaxOpen] = useState(false);
+  const [tax, setTax] = useState<TaxInvoiceFormValue>(EMPTY_TAX_INVOICE);
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [agreePrivacy, setAgreePrivacy] = useState(false);
   const [agreeMarketing, setAgreeMarketing] = useState(false);
@@ -99,14 +109,24 @@ export default function SignupForm() {
             "사업자등록증이 함께 업로드되었습니다. 검토 후 사업자 회원으로 승급됩니다.",
           );
         } catch (err) {
-          // 사업자등록증 업로드 실패는 가입 자체를 실패로 만들지 않음.
-          // 마이페이지에서 다시 업로드 가능.
           console.warn(
             "[signup] 사업자등록증 업로드 실패 — 마이페이지에서 재시도 가능:",
             err,
           );
           toast.error(
             "사업자등록증 업로드에 실패했어요. 마이페이지에서 다시 시도해주세요.",
+          );
+        }
+      }
+
+      if (taxOpen && isTaxInvoiceFilled(tax)) {
+        try {
+          await updateTaxInvoiceInfo(cred.user.uid, toTaxInvoiceInfo(tax));
+          toast.success("세금계산서 정보가 저장되었습니다.");
+        } catch (err) {
+          console.warn("[signup] 세금계산서 정보 저장 실패:", err);
+          toast.error(
+            "세금계산서 정보 저장에 실패했어요. 마이페이지에서 다시 입력해주세요.",
           );
         }
       }
@@ -275,6 +295,47 @@ export default function SignupForm() {
               onChange={(e) => setLicenseFile(e.target.files?.[0] ?? null)}
             />
           </FormField>
+
+          <Separator />
+
+          <div className="rounded-md border border-border p-4">
+            <button
+              type="button"
+              className="flex w-full items-center justify-between text-sm font-medium"
+              onClick={() => setTaxOpen((v) => !v)}
+            >
+              <span>세금계산서 정보 (선택)</span>
+              <span className="text-xs text-muted-foreground">
+                {taxOpen ? "접기 ▴" : "입력하기 ▾"}
+              </span>
+            </button>
+            <p className="mt-1 text-xs text-muted-foreground">
+              세금계산서 발행에 사용됩니다. 가입 후 마이페이지에서도 입력·수정
+              가능합니다.
+            </p>
+            {taxOpen && (
+              <div className="mt-4">
+                <TaxInvoiceForm
+                  value={tax}
+                  onChange={setTax}
+                  sync={{
+                    name: name || undefined,
+                    email: email || undefined,
+                    defaultAddress:
+                      postcode && address1
+                        ? {
+                            recipient: name,
+                            phone,
+                            postcode,
+                            address1,
+                            address2: address2 || undefined,
+                          }
+                        : undefined,
+                  }}
+                />
+              </div>
+            )}
+          </div>
 
           <Separator />
 

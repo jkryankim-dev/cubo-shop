@@ -135,6 +135,10 @@ export default function MypageHomePage() {
                 }
               />
               <Row
+                label="세금계산서 정보"
+                value={profile.taxInvoiceInfo ? "등록됨" : "미등록"}
+              />
+              <Row
                 label="알림톡 수신"
                 value={profile.marketingOptIn ? "동의" : "미동의"}
               />

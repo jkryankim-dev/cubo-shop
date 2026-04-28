@@ -72,6 +72,8 @@ export interface ShopCustomer {
   phoneVerified?: boolean;
   defaultAddress?: ShippingAddress;
   businessLicense?: BusinessLicense;
+  /** 세금계산서 정보 (선택, 회원가입/마이페이지에서 입력) */
+  taxInvoiceInfo?: TaxInvoiceInfo;
   grade: CustomerGrade;
   marketingOptIn?: boolean;
   createdAt?: Timestamp;
@@ -89,8 +91,34 @@ export interface BusinessLicense {
 }
 
 // ---------------------------------------------------------------------
-// ShippingAddress — 한국형 주소 (다음 우편번호 SDK 와 호환)
+// TaxInvoiceInfo — 세금계산서 발행용 정보
+//
+// 사업자 회원이든 일반 회원이든 입력 가능.
+// 회원가입 시 또는 마이페이지에서 추후 입력 가능.
+// 한국 전자세금계산서 발행에 사업자등록번호도 보통 필요하지만,
+// 우선 사용자 명시 6개 필드만 보관 (필요 시 추가).
 // ---------------------------------------------------------------------
+export interface TaxInvoiceAddress {
+  postcode: string;
+  address1: string;
+  address2?: string;
+}
+
+export interface TaxInvoiceInfo {
+  /** 대표자명 */
+  ceo: string;
+  /** 상호명 */
+  companyName: string;
+  /** 업종 */
+  industry: string;
+  /** 업태 */
+  businessType: string;
+  /** 사업장 주소 */
+  address: TaxInvoiceAddress;
+  /** 세금계산서 수신용 이메일 */
+  email: string;
+  updatedAt?: Timestamp;
+}
 export interface ShippingAddress {
   recipient: string;
   phone: string;

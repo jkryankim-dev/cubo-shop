@@ -31,6 +31,7 @@ import type {
   BusinessLicense,
   ShopCustomer,
   ShippingAddress,
+  TaxInvoiceInfo,
 } from "@/types";
 
 const FAKE_EMAIL_DOMAIN = "cubo.shop.local";
@@ -138,6 +139,22 @@ export async function uploadBusinessLicense(
   });
 
   return license;
+}
+
+// ---------------------------------------------------------------------
+// 세금계산서 정보 저장/갱신
+// ---------------------------------------------------------------------
+export async function updateTaxInvoiceInfo(
+  uid: string,
+  info: TaxInvoiceInfo,
+) {
+  await updateDoc(doc(db, "shop_customers", uid), {
+    taxInvoiceInfo: {
+      ...info,
+      updatedAt: serverTimestamp(),
+    },
+    updatedAt: serverTimestamp(),
+  });
 }
 
 // ---------------------------------------------------------------------
