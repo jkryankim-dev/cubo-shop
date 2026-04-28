@@ -12,8 +12,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAuth } from "@/components/auth/auth-provider";
 import { db } from "@/lib/firebase";
-import { updateOrder } from "@/lib/admin";
+import { adminUpdateOrderAction } from "@/lib/actions/checkout";
 import { formatPriceKRW } from "@/lib/format";
 import type { ShopOrder, ShopOrderStatus } from "@/types";
 
@@ -41,6 +42,7 @@ export default function AdminOrderDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const { user } = useAuth();
   const [order, setOrder] = useState<ShopOrder | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -77,16 +79,22 @@ export default function AdminOrderDetailPage({
   }, [id]);
 
   async function handleSave() {
-    if (!order) return;
+    if (!order || !user) return;
     setSaving(true);
     try {
-      await updateOrder({
+      const idToken = await user.getIdToken();
+      const result = await adminUpdateOrderAction({
+        idToken,
         orderId: order.id,
         status,
         carrier: carrier || undefined,
         trackingNumber: trackingNumber || undefined,
       });
-      toast.success("주문 정보가 갱신되었습니다.");
+      if (result.success) {
+        toast.success(result.message);
+      } else {
+        toast.error(result.message);
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "저장 실패");
     } finally {

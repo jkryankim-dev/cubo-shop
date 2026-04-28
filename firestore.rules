@@ -75,6 +75,13 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // -------- shop_messages/{id} --------
+    // 알림톡·SMS 발송 로그 (Admin SDK 만 작성).
+    match /shop_messages/{id} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
     // 그 외 cubo-shop 이 직접 다루지 않는 컬렉션은 ERP 룰에 의해 결정됨.
     // 이 파일에서 별도 default 매처를 두지 않음 (ERP 룰과 병합 시 충돌 방지).
   }

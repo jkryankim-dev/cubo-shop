@@ -13,6 +13,10 @@
 
 import { adminAuth, adminDb } from "@/lib/firebaseAdmin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import {
+  sendCancelledAlimtalk,
+  sendPaymentConfirmedAlimtalk,
+} from "@/lib/alimtalk";
 import type {
   Product,
   ShippingAddress,
@@ -254,6 +258,12 @@ export async function confirmPaymentAction(
     updatedAt: FieldValue.serverTimestamp(),
   });
 
+  // 알림톡 — 결제 확정 (실패해도 결제 결과 영향 X)
+  const updated = { ...order, status: "paid" as const };
+  await sendPaymentConfirmedAlimtalk(updated).catch((err) =>
+    console.warn("[alimtalk] payment-confirmed 발송 실패", err),
+  );
+
   // ERP 동기화 webhook (실패해도 결제 결과에는 영향 X)
   await notifyErpOrderSync().catch((err) =>
     console.warn("[erp-sync] 호출 실패 — 관리자 수동 재동기화 필요할 수 있음", err),
@@ -290,6 +300,8 @@ async function cancelOrderInternal(
   orderId: string,
   reason: string,
 ): Promise<void> {
+  let cancelled: ShopOrder | null = null;
+
   await adminDb().runTransaction(async (tx) => {
     const orderRef = adminDb().collection("shop_orders").doc(orderId);
     const orderSnap = await tx.get(orderRef);
@@ -308,7 +320,14 @@ async function cancelOrderInternal(
       cancelReason: reason,
       updatedAt: FieldValue.serverTimestamp(),
     });
+    cancelled = { ...order, status: "cancelled", cancelReason: reason };
   });
+
+  if (cancelled) {
+    await sendCancelledAlimtalk(cancelled, reason).catch((err) =>
+      console.warn("[alimtalk] cancelled 발송 실패", err),
+    );
+  }
 }
 
 export async function failPaymentAction(
@@ -385,6 +404,74 @@ export async function cleanupExpiredOrdersAction(): Promise<
 // ---------------------------------------------------------------------
 // 5) 무통장입금 등 수동 입금 마킹 (관리자)
 // ---------------------------------------------------------------------
+// ---------------------------------------------------------------------
+// 6) 관리자 — 주문 상태/송장 변경 + 알림톡 자동 발송
+//    클라이언트 SDK 의 updateOrder 와 별개로, 알림톡 트리거가 필요한
+//    상태 전환은 본 Server Action 사용 권장.
+// ---------------------------------------------------------------------
+export interface AdminUpdateOrderInput {
+  idToken: string;
+  orderId: string;
+  status?: ShopOrder["status"];
+  trackingNumber?: string;
+  carrier?: string;
+}
+
+export async function adminUpdateOrderAction(
+  input: AdminUpdateOrderInput,
+): Promise<ActionResult> {
+  const adminUid = await verifyAdmin(input.idToken);
+  if (!adminUid)
+    return { success: false, message: "관리자 권한이 필요합니다." };
+
+  const orderRef = adminDb().collection("shop_orders").doc(input.orderId);
+  const beforeSnap = await orderRef.get();
+  if (!beforeSnap.exists) return { success: false, message: "주문 없음" };
+  const before = beforeSnap.data() as ShopOrder;
+
+  const patch: Record<string, unknown> = {
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+  if (input.status) patch.status = input.status;
+  if (input.trackingNumber !== undefined)
+    patch.trackingNumber = input.trackingNumber;
+  if (input.carrier !== undefined) patch.carrier = input.carrier;
+
+  await orderRef.update(patch);
+
+  const after: ShopOrder = {
+    ...before,
+    ...(input.status ? { status: input.status } : {}),
+    ...(input.trackingNumber !== undefined
+      ? { trackingNumber: input.trackingNumber }
+      : {}),
+    ...(input.carrier !== undefined ? { carrier: input.carrier } : {}),
+  };
+
+  // 상태 전환 알림톡 (실패해도 무시)
+  try {
+    const { sendShippedAlimtalk, sendDeliveredAlimtalk, sendRefundedAlimtalk } =
+      await import("@/lib/alimtalk");
+    const transitioned = before.status !== after.status;
+    const trackingAdded =
+      input.trackingNumber && before.trackingNumber !== input.trackingNumber;
+    if (
+      (transitioned && after.status === "shipped") ||
+      (after.status === "shipped" && trackingAdded)
+    ) {
+      await sendShippedAlimtalk(after);
+    } else if (transitioned && after.status === "delivered") {
+      await sendDeliveredAlimtalk(after);
+    } else if (transitioned && after.status === "refunded") {
+      await sendRefundedAlimtalk(after);
+    }
+  } catch (err) {
+    console.warn("[alimtalk] status-transition 발송 실패", err);
+  }
+
+  return { success: true, message: "주문이 갱신되었습니다." };
+}
+
 export async function manuallyMarkPaidAction(
   idToken: string,
   orderId: string,
@@ -410,5 +497,19 @@ export async function manuallyMarkPaidAction(
     paymentMethod: "MANUAL_TRANSFER",
     updatedAt: FieldValue.serverTimestamp(),
   });
+
+  // 알림톡 — 결제 확정 (수동 입금 케이스도 동일 템플릿)
+  await sendPaymentConfirmedAlimtalk({
+    ...order,
+    status: "paid",
+    manuallyPaidBy: adminUid,
+    paymentMethod: "MANUAL_TRANSFER",
+  }).catch((err) =>
+    console.warn("[alimtalk] manual paid 발송 실패", err),
+  );
+  await notifyErpOrderSync().catch((err) =>
+    console.warn("[erp-sync] 호출 실패", err),
+  );
+
   return { success: true, message: "입금 확인 처리되었습니다." };
 }

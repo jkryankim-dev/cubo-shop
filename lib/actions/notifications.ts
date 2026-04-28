@@ -6,7 +6,7 @@
 // =====================================================================
 
 import { adminAuth, adminDb } from "@/lib/firebaseAdmin";
-import { sendAlimtalk } from "@/lib/popbill";
+import { sendAlimtalk } from "@/lib/alimtalk";
 
 interface ActionResult {
   success: boolean;
@@ -54,10 +54,19 @@ export async function sendAlimtalkAction(
   }
 
   try {
-    const receiptNum = await sendAlimtalk(input);
+    const { receiptID } = await sendAlimtalk(
+      {
+        templateCode: input.templateCode,
+        receiverPhone: input.receiverPhone,
+        receiverName: input.receiverName,
+        msg: input.message,
+        altContent: input.altMessage,
+      },
+      { event: "manual" },
+    );
     return {
       success: true,
-      message: `발송 접수 완료 (영수증: ${receiptNum})`,
+      message: `발송 접수 완료 (영수증: ${receiptID})`,
     };
   } catch (err) {
     return {
