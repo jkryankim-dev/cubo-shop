@@ -52,9 +52,9 @@ cuboerp 와 **동일한 Firebase 프로젝트** 를 공유합니다.
 ### ERP 소유 컬렉션 (cuboerp 가 관리)
 | 컬렉션 | 권한 |
 |---|---|
-| `products` | **읽기만** (노출 조건: `isDeleted !== true && hidden !== true`, 일반 고객 단가는 `priceA`) |
-| `products.stock` | 결제 확정 시 **서버 SDK 트랜잭션으로만** 차감 — 그 외 변경 금지 |
-| `orders`, `users`, `entities` 등 기타 ERP 컬렉션 | **접근 금지** (코드에서 import 자체 만들지 말 것) |
+| `products` | **읽기만** (노출 조건은 ERP 의 `tags` 에 `'ON'` 포함, `isDeleted/hidden` 한 번 더 체크. 단가는 `priceA ?? defaultPrice`) |
+| `products.stock` | **주문 생성 시점에 cubo-shop 서버 SDK 트랜잭션으로 차감**, 결제 실패/취소 시 트랜잭션으로 복원. ERP 의 자체 흐름 (입고·조정·반품) 은 ERP 가 처리 |
+| `orders`, `users`, `entities` 등 기타 ERP 컬렉션 | **접근 금지** (cubo-shop 은 read-only `products` 만) |
 
 > `priceB` / `priceC` / `priceCOST` 는 B2B 단가 — 쇼핑몰에서 무시.
 
@@ -68,10 +68,21 @@ cuboerp 와 **동일한 Firebase 프로젝트** 를 공유합니다.
 쇼핑몰 `firestore.rules` 는 `shop_*` 컬렉션만 다룰 것 (ERP rules 와 충돌 X). ERP rules 는 cuboerp 세션에서 따로 갱신.
 
 ## 핵심 도메인 사항
-- **결제 PG**: 포트원(PortOne) 또는 토스페이먼츠 SDK 연동 (한국 PG)
+- **결제 PG**: **토스페이먼츠** (선정 완료, 심사 진행 중)
 - **회원가입**: Firebase Auth (이메일 / 카카오·네이버 소셜은 추후)
-- **배송**: 일반 택배 (로젠택배 등) — 송장번호 입력형
+- **배송**: 일반 택배 — 송장번호 입력형. **당일 출고는 오후 2시 이전 결제 확정(paid) 건만**
 - **통화/언어**: 한국어 라벨, ₩ 통화, 천단위 콤마, 모바일 반응형 필수
+
+## 주문·결제 정책
+- **재고 차감 시점**: 주문 생성 시 (status=pending) 트랜잭션으로 즉시 차감 (홀드)
+- **입금 대기**: pending 상태로 **6시간** 동안 유효, 경과 시 자동 cancelled + 재고 복원
+- **상태 흐름**: `pending` → `paid` → `preparing` → `shipped` → `delivered` (또는 `cancelled` / `refunded`)
+- **무통장 입금**: 관리자 페이지에서 수동으로 paid 마킹 가능
+
+## ERP 동기화
+- cubo-shop 의 `shop_orders` 가 단일 진실. cuboerp 가 onSnapshot 으로 read.
+- cuboerp 의 주문 관리 화면 표시명: **"쿠보몰 (주문자 상호명)"**
+- cubo-shop 은 ERP 의 `orders` 컬렉션을 직접 쓰지 않음 (cuboerp 가 자기 시스템에 미러링)
 
 ## 법적 요건 (푸터 필수 표시)
 - 사업자 정보: 사업자등록번호, 통신판매업번호, 대표자, 주소, 연락처, 메일

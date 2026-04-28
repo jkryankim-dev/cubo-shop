@@ -4,10 +4,16 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAuth } from "@/components/auth/auth-provider";
 import { listAllOrders } from "@/lib/admin";
+import {
+  cleanupExpiredOrdersAction,
+  manuallyMarkPaidAction,
+} from "@/lib/actions/checkout";
 import { formatPriceKRW } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { ShopOrder, ShopOrderStatus } from "@/types";
@@ -43,28 +49,47 @@ const STATUS_COLOR: Record<ShopOrderStatus, string> = {
   refunded: "bg-destructive/15 text-destructive",
 };
 
+function formatRemaining(ms: number): string {
+  if (ms <= 0) return "만료";
+  const h = Math.floor(ms / 3600_000);
+  const m = Math.floor((ms % 3600_000) / 60_000);
+  return `${h}시간 ${m}분`;
+}
+
 export default function AdminOrdersPage() {
+  const { user } = useAuth();
   const [orders, setOrders] = useState<ShopOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("");
   const [status, setStatus] = useState<ShopOrderStatus | "all">("all");
+  const [now, setNow] = useState(Date.now());
+  const [markingUid, setMarkingUid] = useState<string | null>(null);
 
+  // 페이지 진입 시 한 번 만료 정리 → 그 후 목록 로드
   useEffect(() => {
     let cancelled = false;
-    listAllOrders()
-      .then((list) => {
-        if (!cancelled) setOrders(list);
-      })
-      .catch((err) => {
-        if (!cancelled)
-          toast.error(err instanceof Error ? err.message : "주문 로드 실패");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+    async function run() {
+      try {
+        await cleanupExpiredOrdersAction();
+      } catch {
+        /* noop */
+      }
+      const list = await listAllOrders();
+      if (!cancelled) {
+        setOrders(list);
+        setLoading(false);
+      }
+    }
+    run();
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  // 카운트다운 갱신용 1분 timer
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(t);
   }, []);
 
   const filtered = useMemo(() => {
@@ -74,7 +99,8 @@ export default function AdminOrdersPage() {
         filter &&
         !o.id.includes(filter) &&
         !o.shippingAddress?.recipient?.includes(filter) &&
-        !o.shippingAddress?.phone?.includes(filter)
+        !o.shippingAddress?.phone?.includes(filter) &&
+        !o.customerName?.includes(filter)
       ) {
         return false;
       }
@@ -82,11 +108,35 @@ export default function AdminOrdersPage() {
     });
   }, [orders, filter, status]);
 
+  async function handleMarkPaid(orderId: string) {
+    if (!user) return;
+    if (!window.confirm(`주문 ${orderId.slice(0, 12)} 을 입금 완료로 처리할까요?`))
+      return;
+    setMarkingUid(orderId);
+    try {
+      const idToken = await user.getIdToken();
+      const result = await manuallyMarkPaidAction(idToken, orderId);
+      if (result.success) {
+        toast.success(result.message);
+        setOrders((prev) =>
+          prev.map((o) => (o.id === orderId ? { ...o, status: "paid" } : o)),
+        );
+      } else {
+        toast.error(result.message);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "처리 실패");
+    } finally {
+      setMarkingUid(null);
+    }
+  }
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
       <h1 className="text-2xl font-bold tracking-tight">주문 관리</h1>
       <p className="mt-1 text-sm text-muted-foreground">
-        전체 주문 흐름 관리 — 주문 클릭으로 상세 / 송장 입력.
+        결제 대기 주문은 6시간 이후 자동 취소됩니다. 무통장 입금은 수동으로 결제
+        완료 처리할 수 있어요.
       </p>
 
       <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -140,54 +190,89 @@ export default function AdminOrdersPage() {
                   <tr>
                     <th className="py-3 pl-4 pr-2">주문번호</th>
                     <th className="py-3 pr-2">상태</th>
-                    <th className="py-3 pr-2">받는분</th>
+                    <th className="py-3 pr-2">받는분 / 주문자</th>
                     <th className="py-3 pr-2">상품</th>
                     <th className="py-3 pr-2">금액</th>
-                    <th className="py-3 pr-4">송장</th>
+                    <th className="py-3 pr-2">입금/송장</th>
+                    <th className="py-3 pr-4 text-right">처리</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {filtered.map((o) => (
-                    <tr
-                      key={o.id}
-                      className="cursor-pointer transition-colors hover:bg-muted/40"
-                    >
-                      <td colSpan={6} className="p-0">
-                        <Link
-                          href={`/admin/orders/${o.id}`}
-                          className="grid grid-cols-[1.4fr_0.8fr_0.8fr_0.6fr_0.8fr_0.8fr] items-center gap-2 px-4 py-3"
-                        >
-                          <span className="font-mono text-xs">
+                  {filtered.map((o) => {
+                    const expiresMs = o.expiresAt
+                      ? o.expiresAt.toMillis() - now
+                      : 0;
+                    const isPending = o.status === "pending";
+                    return (
+                      <tr key={o.id}>
+                        <td className="py-3 pl-4 pr-2">
+                          <Link
+                            href={`/admin/orders/${o.id}`}
+                            className="font-mono text-xs hover:underline"
+                          >
                             #{o.id.slice(0, 12)}
+                          </Link>
+                        </td>
+                        <td className="py-3 pr-2">
+                          <span
+                            className={cn(
+                              "rounded px-2 py-0.5 text-xs font-medium",
+                              STATUS_COLOR[o.status],
+                            )}
+                          >
+                            {STATUS_LABEL[o.status]}
                           </span>
-                          <span>
+                        </td>
+                        <td className="py-3 pr-2">
+                          <div className="text-sm">
+                            {o.shippingAddress?.recipient ?? "—"}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            주문자: {o.customerName ?? "—"}
+                          </div>
+                        </td>
+                        <td className="py-3 pr-2 text-xs text-muted-foreground">
+                          {o.items.length}개
+                        </td>
+                        <td className="py-3 pr-2 font-semibold">
+                          {formatPriceKRW(o.totalAmount)}
+                        </td>
+                        <td className="py-3 pr-2 text-xs">
+                          {isPending ? (
                             <span
                               className={cn(
-                                "rounded px-2 py-0.5 text-xs font-medium",
-                                STATUS_COLOR[o.status],
+                                expiresMs < 60 * 60_000
+                                  ? "text-destructive"
+                                  : "text-muted-foreground",
                               )}
                             >
-                              {STATUS_LABEL[o.status]}
+                              남은시간 {formatRemaining(expiresMs)}
                             </span>
-                          </span>
-                          <span className="text-sm">
-                            {o.shippingAddress?.recipient ?? "—"}
-                          </span>
-                          <span className="text-sm text-muted-foreground">
-                            {o.items.length}개
-                          </span>
-                          <span className="font-semibold">
-                            {formatPriceKRW(o.totalAmount)}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {o.trackingNumber
-                              ? `${o.carrier ?? ""} ${o.trackingNumber}`
-                              : "미입력"}
-                          </span>
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
+                          ) : o.trackingNumber ? (
+                            <span className="text-foreground/80">
+                              {o.carrier} {o.trackingNumber}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </td>
+                        <td className="py-3 pr-4 text-right">
+                          {isPending && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={markingUid === o.id}
+                              onClick={() => handleMarkPaid(o.id)}
+                            >
+                              {markingUid === o.id
+                                ? "처리 중…"
+                                : "입금 완료 처리"}
+                            </Button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

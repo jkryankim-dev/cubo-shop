@@ -14,6 +14,9 @@ importers:
       '@sentry/nextjs':
         specifier: ^10.50.0
         version: 10.50.0(@opentelemetry/core@2.7.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.7.0(@opentelemetry/api@1.9.1))(next@16.2.4(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react@19.2.4)(webpack@5.106.2)
+      '@tosspayments/payment-sdk':
+        specifier: ^1.9.2
+        version: 1.9.2
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -37,7 +40,7 @@ importers:
         version: 0.4.6(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       popbill:
         specifier: ^1.64.0
-        version: 1.64.0(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(@types/react@19.2.14)
+        version: 1.64.0(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(@opentelemetry/core@2.7.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.7.0(@opentelemetry/api@1.9.1))(@types/react@19.2.14)(webpack@5.106.2)
       react:
         specifier: 19.2.4
         version: 19.2.4
@@ -1386,6 +1389,15 @@ packages:
   '@tootallnate/once@2.0.0':
     resolution: {integrity: sha512-XCuKFP5PS55gnMVu3dty8KPatLqUoy/ZYzDzAGCQ8JNFCkLXzmI7vNHCR+XpbZaMWQK/vQubr7PkYq8g470J/A==}
     engines: {node: '>= 10'}
+
+  '@tosspayments/payment-sdk@1.9.2':
+    resolution: {integrity: sha512-le0NatZUSH40ZS70l6UFAdapBAoCaibfK+gPI//sfIbGYBh6KWQ58HHif0M1kSkDEbiL6B0yrhkGG3HWd2jkig==}
+
+  '@tosspayments/payment__types@1.69.0':
+    resolution: {integrity: sha512-EbU36vLEWfhRpX/g4V0DyRiUmTkNeeVDYjJamD9aJiLmRbLl9PVdXi5QOQTMYma2RGRgA8drHY4yDMsjvKFwCg==}
+
+  '@tosspayments/sdk-constants@0.2.2':
+    resolution: {integrity: sha512-qTIcD9JnVtN65/yiW5sPAlvK5fpQtDluv4IEyslubncbQLQKE+ePSnGZU1fLNPxcchv6QTnwmgj9Ndm6EN/Ymg==}
 
   '@tybys/wasm-util@0.10.1':
     resolution: {integrity: sha512-9tTaPJLSiejZKx+Bmog4uSubteqTvFrVrURwkmHixBo0G4seD0zUxp98E1DzUBJxLQ3NPwXrGKDiVjwx/DpPsg==}
@@ -3437,6 +3449,10 @@ packages:
     resolution: {integrity: sha512-Ne2YiiGN8bmrmJJEuTWTLJR32nh/JdL1+PSicowtNb0WFpn59GK8/lfD61bVtzguz7b3PBt74nxpv/Pw5po5Rg==}
     engines: {node: '>=8'}
 
+  type-fest@2.19.0:
+    resolution: {integrity: sha512-RAH822pAdBgcNMAfWnCBU3CFZcfZ/i1eZjwFU/dsLKumyuuP3niueg2UAukXYF0E2AAoc82ZSSf9J0WQBinzHA==}
+    engines: {node: '>=12.20'}
+
   typed-array-buffer@1.0.3:
     resolution: {integrity: sha512-nAYYwfY3qnzX30IkA6AQZjVbtK6duGontcQm1WSG1MD94YLqK0515GNApXkoxKOWMusVssAHWLh9SeaoefYFGw==}
     engines: {node: '>= 0.4'}
@@ -5029,6 +5045,18 @@ snapshots:
   '@tootallnate/once@2.0.0':
     optional: true
 
+  '@tosspayments/payment-sdk@1.9.2':
+    dependencies:
+      '@tosspayments/payment__types': 1.69.0
+
+  '@tosspayments/payment__types@1.69.0':
+    dependencies:
+      '@tosspayments/sdk-constants': 0.2.2
+
+  '@tosspayments/sdk-constants@0.2.2':
+    dependencies:
+      type-fest: 2.19.0
+
   '@tybys/wasm-util@0.10.1':
     dependencies:
       tslib: 2.8.1
@@ -5596,9 +5624,10 @@ snapshots:
 
   csstype@3.2.3: {}
 
-  cubo-shop@file:(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(@types/react@19.2.14):
+  cubo-shop@file:(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(@opentelemetry/core@2.7.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.7.0(@opentelemetry/api@1.9.1))(@types/react@19.2.14)(webpack@5.106.2):
     dependencies:
       '@radix-ui/react-slot': 1.2.4(@types/react@19.2.14)(react@19.2.4)
+      '@sentry/nextjs': 10.50.0(@opentelemetry/core@2.7.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.7.0(@opentelemetry/api@1.9.1))(next@16.2.4(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react@19.2.4)(webpack@5.106.2)
       class-variance-authority: 0.7.1
       clsx: 2.1.1
       firebase: 12.12.1
@@ -5606,7 +5635,7 @@ snapshots:
       lucide-react: 1.11.0(react@19.2.4)
       next: 16.2.4(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       next-themes: 0.4.6(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
-      popbill: 1.64.0(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(@types/react@19.2.14)
+      popbill: 1.64.0(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(@opentelemetry/core@2.7.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.7.0(@opentelemetry/api@1.9.1))(@types/react@19.2.14)(webpack@5.106.2)
       react: 19.2.4
       react-daum-postcode: 4.0.0(react@19.2.4)
       react-dom: 19.2.4(react@19.2.4)
@@ -5615,6 +5644,9 @@ snapshots:
     transitivePeerDependencies:
       - '@babel/core'
       - '@opentelemetry/api'
+      - '@opentelemetry/core'
+      - '@opentelemetry/exporter-trace-otlp-http'
+      - '@opentelemetry/sdk-trace-base'
       - '@playwright/test'
       - '@react-native-async-storage/async-storage'
       - '@types/react'
@@ -5623,6 +5655,7 @@ snapshots:
       - encoding
       - sass
       - supports-color
+      - webpack
 
   damerau-levenshtein@1.0.8: {}
 
@@ -6996,13 +7029,16 @@ snapshots:
 
   picomatch@4.0.4: {}
 
-  popbill@1.64.0(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(@types/react@19.2.14):
+  popbill@1.64.0(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(@opentelemetry/core@2.7.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.7.0(@opentelemetry/api@1.9.1))(@types/react@19.2.14)(webpack@5.106.2):
     dependencies:
       linkhub: 1.8.2
-      popbill: cubo-shop@file:(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(@types/react@19.2.14)
+      popbill: cubo-shop@file:(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(@opentelemetry/core@2.7.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.7.0(@opentelemetry/api@1.9.1))(@types/react@19.2.14)(webpack@5.106.2)
     transitivePeerDependencies:
       - '@babel/core'
       - '@opentelemetry/api'
+      - '@opentelemetry/core'
+      - '@opentelemetry/exporter-trace-otlp-http'
+      - '@opentelemetry/sdk-trace-base'
       - '@playwright/test'
       - '@react-native-async-storage/async-storage'
       - '@types/react'
@@ -7011,6 +7047,7 @@ snapshots:
       - encoding
       - sass
       - supports-color
+      - webpack
 
   possible-typed-array-names@1.1.0: {}
 
@@ -7502,6 +7539,8 @@ snapshots:
       prelude-ls: 1.2.1
 
   type-fest@0.7.1: {}
+
+  type-fest@2.19.0: {}
 
   typed-array-buffer@1.0.3:
     dependencies:

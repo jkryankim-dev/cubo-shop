@@ -124,13 +124,28 @@ export interface ShopOrderItem {
 export interface ShopOrder {
   id: string;
   customerUid: string;
+  /** 주문자 이름 (스냅샷, ERP 표시용) */
+  customerName: string;
+  /** 주문자 사업자 상호 (있으면, ERP 표시명 "쿠보몰 (상호)" 에 사용) */
+  customerCompany?: string;
+  /** 주문자 등급 (스냅샷) */
+  customerGrade?: "general" | "business";
   items: ShopOrderItem[];
   totalAmount: number;
   status: ShopOrderStatus;
   shippingAddress: ShippingAddress;
   trackingNumber?: string;
   carrier?: string;
+  /** 토스페이먼츠 paymentKey (confirm 후 발급) */
   paymentId?: string;
+  /** 결제 수단 (CARD / TRANSFER / VIRTUAL_ACCOUNT 등) */
+  paymentMethod?: string;
+  /** 입금대기 만료 시각 (createdAt + 6시간). 경과 시 자동 cancelled */
+  expiresAt?: Timestamp;
+  /** 무통장입금 등 수동 입금 마킹 시 (관리자 uid) */
+  manuallyPaidBy?: string;
+  /** 취소 사유 (auto-expired / manual / payment-fail 등) */
+  cancelReason?: string;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 }

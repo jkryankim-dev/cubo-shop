@@ -1,0 +1,355 @@
+"use server";
+
+// =====================================================================
+// 결제·주문 Server Actions
+//
+// 흐름:
+//   1) createPendingOrder: 주문 생성 + 재고 차감 (트랜잭션)
+//   2) 클라이언트가 토스 SDK 로 결제 요청
+//   3) confirmPaymentAction: 토스 confirm API 호출 + status=paid
+//   4) failPaymentAction / cancelOrderAction: 재고 복원 + status=cancelled
+//   5) cleanupExpiredOrdersAction: 6시간 경과 pending 자동 취소
+// =====================================================================
+
+import { adminAuth, adminDb } from "@/lib/firebaseAdmin";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import type {
+  Product,
+  ShippingAddress,
+  ShopCartItem,
+  ShopOrder,
+} from "@/types";
+
+const PAYMENT_HOLD_MS = 6 * 60 * 60 * 1000; // 6시간
+
+interface ActionResult<T = unknown> {
+  success: boolean;
+  message: string;
+  data?: T;
+}
+
+async function verifyAuth(idToken: string): Promise<string | null> {
+  try {
+    const decoded = await adminAuth().verifyIdToken(idToken);
+    return decoded.uid;
+  } catch {
+    return null;
+  }
+}
+
+async function verifyAdmin(idToken: string): Promise<string | null> {
+  const uid = await verifyAuth(idToken);
+  if (!uid) return null;
+  const adminDoc = await adminDb().collection("shop_admins").doc(uid).get();
+  return adminDoc.exists ? uid : null;
+}
+
+// ---------------------------------------------------------------------
+// 1) 주문 생성 + 재고 차감 (트랜잭션)
+// ---------------------------------------------------------------------
+export interface CreatePendingOrderInput {
+  idToken: string;
+  items: ShopCartItem[];
+  shippingAddress: ShippingAddress;
+}
+
+export async function createPendingOrderAction(
+  input: CreatePendingOrderInput,
+): Promise<ActionResult<{ orderId: string; amount: number; orderName: string }>> {
+  const uid = await verifyAuth(input.idToken);
+  if (!uid) return { success: false, message: "로그인이 필요합니다." };
+
+  if (!input.items.length)
+    return { success: false, message: "장바구니가 비어있습니다." };
+
+  const customerSnap = await adminDb()
+    .collection("shop_customers")
+    .doc(uid)
+    .get();
+  if (!customerSnap.exists)
+    return { success: false, message: "회원 정보를 찾을 수 없습니다." };
+  const customer = customerSnap.data() as {
+    name?: string;
+    grade?: "general" | "business";
+    businessLicense?: { status?: string };
+  };
+
+  const orderId = adminDb().collection("shop_orders").doc().id;
+
+  const result = await adminDb().runTransaction(async (tx) => {
+    let totalAmount = 0;
+    const orderItems: ShopOrder["items"] = [];
+
+    for (const it of input.items) {
+      if (it.quantity <= 0) {
+        throw new Error("수량이 0 이하인 항목이 있습니다.");
+      }
+      const productRef = adminDb().collection("products").doc(it.productId);
+      const productSnap = await tx.get(productRef);
+      if (!productSnap.exists) {
+        throw new Error(`존재하지 않는 상품: ${it.productId}`);
+      }
+      const product = productSnap.data() as Product;
+      if (product.isDeleted === true || product.hidden === true) {
+        throw new Error(`판매 중지 상품: ${product.name ?? it.productId}`);
+      }
+      if (!product.tags?.includes("ON")) {
+        throw new Error(`현재 판매하지 않는 상품: ${product.name ?? it.productId}`);
+      }
+      const stock = product.stock ?? 0;
+      if (stock < it.quantity) {
+        throw new Error(
+          `${product.name} 재고 부족 (요청 ${it.quantity}, 가용 ${stock})`,
+        );
+      }
+      tx.update(productRef, {
+        stock: FieldValue.increment(-it.quantity),
+      });
+      const unitPrice = product.priceA ?? product.defaultPrice ?? 0;
+      totalAmount += unitPrice * it.quantity;
+      orderItems.push({
+        productId: it.productId,
+        name: product.name,
+        unitPrice,
+        quantity: it.quantity,
+        image: product.imageUrl,
+      });
+    }
+
+    const expiresAt = Timestamp.fromMillis(Date.now() + PAYMENT_HOLD_MS);
+
+    // 객체 리터럴로 직접 set — admin/client Timestamp 타입 차이를 피함
+    tx.set(adminDb().collection("shop_orders").doc(orderId), {
+      id: orderId,
+      customerUid: uid,
+      customerName: customer.name ?? "",
+      customerCompany:
+        customer.grade === "business" ? customer.name : undefined,
+      customerGrade: customer.grade,
+      items: orderItems,
+      totalAmount,
+      status: "pending",
+      shippingAddress: input.shippingAddress,
+      expiresAt,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    return { totalAmount, orderName: orderItems[0]?.name ?? "주문" };
+  });
+
+  const orderName =
+    input.items.length > 1
+      ? `${result.orderName} 외 ${input.items.length - 1}건`
+      : result.orderName;
+
+  return {
+    success: true,
+    message: "주문이 접수되었습니다.",
+    data: {
+      orderId,
+      amount: result.totalAmount,
+      orderName,
+    },
+  };
+}
+
+// ---------------------------------------------------------------------
+// 2) 토스 결제 확정 (successUrl 콜백에서 호출)
+// ---------------------------------------------------------------------
+export interface ConfirmPaymentInput {
+  paymentKey: string;
+  orderId: string;
+  amount: number;
+}
+
+export async function confirmPaymentAction(
+  input: ConfirmPaymentInput,
+): Promise<ActionResult> {
+  const secretKey = process.env.TOSS_SECRET_KEY;
+  if (!secretKey)
+    return {
+      success: false,
+      message: "결제 환경변수 (TOSS_SECRET_KEY) 가 비어있습니다.",
+    };
+
+  // 주문 검증 (위변조 방지: 우리 DB 의 totalAmount 와 일치하는지)
+  const orderRef = adminDb().collection("shop_orders").doc(input.orderId);
+  const orderSnap = await orderRef.get();
+  if (!orderSnap.exists) return { success: false, message: "주문 없음" };
+  const order = orderSnap.data() as ShopOrder;
+  if (order.totalAmount !== input.amount) {
+    return { success: false, message: "결제 금액이 주문 금액과 다릅니다." };
+  }
+  if (order.status !== "pending") {
+    return {
+      success: true,
+      message: `이미 처리된 주문입니다 (status=${order.status}).`,
+    };
+  }
+
+  // 토스 confirm API
+  const auth = Buffer.from(`${secretKey}:`).toString("base64");
+  const res = await fetch("https://api.tosspayments.com/v1/payments/confirm", {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${auth}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      paymentKey: input.paymentKey,
+      orderId: input.orderId,
+      amount: input.amount,
+    }),
+  });
+  if (!res.ok) {
+    const errText = await res.text();
+    return {
+      success: false,
+      message: `토스 결제 확인 실패: ${errText.slice(0, 200)}`,
+    };
+  }
+  const tossData = (await res.json()) as {
+    method?: string;
+    paymentKey?: string;
+  };
+
+  await orderRef.update({
+    status: "paid",
+    paymentId: tossData.paymentKey ?? input.paymentKey,
+    paymentMethod: tossData.method ?? null,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+
+  return { success: true, message: "결제 확정되었습니다." };
+}
+
+// ---------------------------------------------------------------------
+// 3) 결제 실패 / 사용자 취소 / 만료 — 재고 복원 + status=cancelled
+// ---------------------------------------------------------------------
+async function cancelOrderInternal(
+  orderId: string,
+  reason: string,
+): Promise<void> {
+  await adminDb().runTransaction(async (tx) => {
+    const orderRef = adminDb().collection("shop_orders").doc(orderId);
+    const orderSnap = await tx.get(orderRef);
+    if (!orderSnap.exists) throw new Error("주문 없음");
+    const order = orderSnap.data() as ShopOrder;
+    if (order.status !== "pending") return; // 이미 처리됨
+
+    // 재고 복원
+    for (const it of order.items) {
+      tx.update(adminDb().collection("products").doc(it.productId), {
+        stock: FieldValue.increment(it.quantity),
+      });
+    }
+    tx.update(orderRef, {
+      status: "cancelled",
+      cancelReason: reason,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  });
+}
+
+export async function failPaymentAction(
+  orderId: string,
+  reason = "payment-fail",
+): Promise<ActionResult> {
+  try {
+    await cancelOrderInternal(orderId, reason);
+    return { success: true, message: "주문이 취소되었습니다." };
+  } catch (err) {
+    return {
+      success: false,
+      message: err instanceof Error ? err.message : "취소 실패",
+    };
+  }
+}
+
+export async function cancelMyPendingOrderAction(
+  idToken: string,
+  orderId: string,
+): Promise<ActionResult> {
+  const uid = await verifyAuth(idToken);
+  if (!uid) return { success: false, message: "인증 실패" };
+  const orderSnap = await adminDb()
+    .collection("shop_orders")
+    .doc(orderId)
+    .get();
+  if (!orderSnap.exists) return { success: false, message: "주문 없음" };
+  const order = orderSnap.data() as ShopOrder;
+  if (order.customerUid !== uid)
+    return { success: false, message: "권한 없음" };
+  if (order.status !== "pending")
+    return { success: false, message: "이미 처리된 주문은 취소할 수 없습니다." };
+  try {
+    await cancelOrderInternal(orderId, "user-cancel");
+    return { success: true, message: "주문이 취소되었습니다." };
+  } catch (err) {
+    return {
+      success: false,
+      message: err instanceof Error ? err.message : "취소 실패",
+    };
+  }
+}
+
+// ---------------------------------------------------------------------
+// 4) 6시간 경과 pending 자동 정리
+//    /admin/orders 진입 시 + cron (추후) 둘 다에서 호출 가능.
+// ---------------------------------------------------------------------
+export async function cleanupExpiredOrdersAction(): Promise<
+  ActionResult<{ cleaned: number }>
+> {
+  const now = Timestamp.now();
+  const snap = await adminDb()
+    .collection("shop_orders")
+    .where("status", "==", "pending")
+    .where("expiresAt", "<", now)
+    .get();
+  let cleaned = 0;
+  for (const doc of snap.docs) {
+    try {
+      await cancelOrderInternal(doc.id, "auto-expired");
+      cleaned += 1;
+    } catch (err) {
+      console.warn("[cleanup-expired]", doc.id, err);
+    }
+  }
+  return {
+    success: true,
+    message: `${cleaned}건 만료 처리`,
+    data: { cleaned },
+  };
+}
+
+// ---------------------------------------------------------------------
+// 5) 무통장입금 등 수동 입금 마킹 (관리자)
+// ---------------------------------------------------------------------
+export async function manuallyMarkPaidAction(
+  idToken: string,
+  orderId: string,
+): Promise<ActionResult> {
+  const adminUid = await verifyAdmin(idToken);
+  if (!adminUid)
+    return { success: false, message: "관리자 권한이 필요합니다." };
+
+  const orderRef = adminDb().collection("shop_orders").doc(orderId);
+  const orderSnap = await orderRef.get();
+  if (!orderSnap.exists) return { success: false, message: "주문 없음" };
+  const order = orderSnap.data() as ShopOrder;
+  if (order.status !== "pending") {
+    return {
+      success: false,
+      message: `현재 상태(${order.status})에서 입금 마킹 불가`,
+    };
+  }
+
+  await orderRef.update({
+    status: "paid",
+    manuallyPaidBy: adminUid,
+    paymentMethod: "MANUAL_TRANSFER",
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  return { success: true, message: "입금 확인 처리되었습니다." };
+}
