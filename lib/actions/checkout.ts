@@ -47,10 +47,22 @@ async function verifyAdmin(idToken: string): Promise<string | null> {
 // ---------------------------------------------------------------------
 // 1) 주문 생성 + 재고 차감 (트랜잭션)
 // ---------------------------------------------------------------------
+// === GUEST_CHECKOUT (토스 승인 후 제거) ===
+// 비회원/회원 모두 사용 가능한 주문자 정보 인자. 회원 전용으로 회귀 시
+// `buyerInfo` 필드 + isGuest 처리 + signInAsGuest 호출처 grep 으로 제거하세요.
+export interface BuyerInfo {
+  name: string;
+  phone: string;
+  email: string;
+}
+// === GUEST_CHECKOUT END ===
+
 export interface CreatePendingOrderInput {
   idToken: string;
   items: ShopCartItem[];
   shippingAddress: ShippingAddress;
+  /** 주문자 정보 (회원이면 프로필보다 입력값 우선). GUEST_CHECKOUT 흐름에서 필수. */
+  buyerInfo?: BuyerInfo;
 }
 
 export async function createPendingOrderAction(
@@ -62,20 +74,32 @@ export async function createPendingOrderAction(
   if (!input.items.length)
     return { success: false, message: "장바구니가 비어있습니다." };
 
+  // 회원 프로필 (있으면) — 비회원(익명)이면 없음
   const customerSnap = await adminDb()
     .collection("shop_customers")
     .doc(uid)
     .get();
-  if (!customerSnap.exists)
-    return { success: false, message: "회원 정보를 찾을 수 없습니다." };
-  const customer = customerSnap.data() as {
-    name?: string;
-    companyName?: string;
-    grade?: "general" | "business";
-    phone?: string;
-    email?: string;
-    businessLicense?: { status?: string };
-  };
+  const customer = customerSnap.exists
+    ? (customerSnap.data() as {
+        name?: string;
+        companyName?: string;
+        grade?: "general" | "business";
+        phone?: string;
+        email?: string;
+      })
+    : null;
+
+  // 주문자 정보 결정: buyerInfo 우선, 없으면 회원 프로필, 그것도 없으면 에러
+  const buyerName = input.buyerInfo?.name?.trim() || customer?.name || "";
+  const buyerPhone = input.buyerInfo?.phone?.trim() || customer?.phone || "";
+  const buyerEmail = input.buyerInfo?.email?.trim() || customer?.email || "";
+  if (!buyerName || !buyerPhone || !buyerEmail) {
+    return {
+      success: false,
+      message: "주문자 정보(이름·전화·이메일)를 모두 입력해주세요.",
+    };
+  }
+  const isGuest = !customer;
 
   const orderId = adminDb().collection("shop_orders").doc().id;
 
@@ -127,13 +151,14 @@ export async function createPendingOrderAction(
     tx.set(adminDb().collection("shop_orders").doc(orderId), {
       id: orderId,
       customerUid: uid,
-      customerName: customer.name ?? "",
+      customerName: buyerName,
       customerCompany:
-        customer.companyName ??
-        (customer.grade === "business" ? customer.name : undefined),
-      customerGrade: customer.grade,
-      customerPhone: customer.phone ?? "",
-      customerEmail: customer.email ?? "",
+        customer?.companyName ??
+        (customer?.grade === "business" ? customer.name : undefined),
+      customerGrade: customer?.grade ?? "general",
+      customerPhone: buyerPhone,
+      customerEmail: buyerEmail,
+      isGuest,
       items: orderItems,
       totalAmount,
       status: "pending",

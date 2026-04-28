@@ -1,23 +1,24 @@
 // =====================================================================
 // 상품 데이터 액세스 — ERP `products` 컬렉션 READ-ONLY
 //
-// 노출 결정은 lib/visibility.ts 의 isShoppableProduct() 만 사용합니다.
-// (ERP 의 Product.tags 에 'ON' 이 있는 상품만 노출)
+// 노출 결정은 두 가지 조건을 모두 만족해야 합니다:
+//   1) lib/visibility.ts 의 isShoppableProduct() — ERP 의 'ON' 태그 등
+//   2) shop_collections 중 하나 이상에 등록 — 관리자가 큐레이션 페이지에 추가한 상품만
 // =====================================================================
 
 import { collection, getDocs } from "firebase/firestore";
 
 import { db } from "./firebase";
+import { listCollections } from "./collections";
 import { isShoppableProduct } from "./visibility";
 import type { Product } from "@/types";
 
 /**
- * 쇼핑몰에 노출 가능한 상품 목록.
+ * 쇼핑몰 카탈로그(`/products`) 에 노출 가능한 상품 목록.
  *
- * Firestore where('tags', 'array-contains', 'ON') 로 서버 필터도 가능하지만
- * isDeleted/hidden 추가 필터를 클라이언트에서 한 번 더 처리해야 하므로
- * 일관된 isShoppableProduct() 적용을 위해 클라이언트 필터로 통일합니다.
- * (현 데이터셋 규모에 적합. 운영 규모 확장 시 인덱스 + 서버 필터로 전환)
+ * 노출 조건 (모두 만족):
+ *   - ERP 의 `tags` 에 'ON' 포함, isDeleted/hidden 아님 (isShoppableProduct)
+ *   - shop_collections 중 하나 이상에 등록됨 (isPublic 무관 — 관리자 큐레이션 결정)
  *
  * 환경변수가 비어있으면 빈 배열을 반환합니다.
  */
@@ -26,9 +27,20 @@ export async function getPublicProducts(): Promise<Product[]> {
     return [];
   }
 
-  const snap = await getDocs(collection(db, "products"));
-  return snap.docs
+  const [productSnap, collections] = await Promise.all([
+    getDocs(collection(db, "products")),
+    listCollections({ publicOnly: true }),
+  ]);
+
+  // 공개 컬렉션에 등록된 productId 모음
+  const exposedIds = new Set<string>();
+  for (const c of collections) {
+    for (const pid of c.productIds) exposedIds.add(pid);
+  }
+
+  return productSnap.docs
     .map((d) => ({ id: d.id, ...d.data() }) as Product)
     .filter((p) => isShoppableProduct(p))
+    .filter((p) => exposedIds.has(p.id))
     .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "", "ko"));
 }

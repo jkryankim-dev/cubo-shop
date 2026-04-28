@@ -175,6 +175,8 @@ export interface ShopOrder {
   shippingAddress: ShippingAddress;
   trackingNumber?: string;
   carrier?: string;
+  /** 비회원(익명) 결제 여부 — GUEST_CHECKOUT 흐름. 토스 승인 후 제거 시 항상 false 가 됨 */
+  isGuest?: boolean;
   /** 토스페이먼츠 paymentKey (confirm 후 발급) */
   paymentId?: string;
   /** 결제 수단 (CARD / TRANSFER / VIRTUAL_ACCOUNT 등) */
