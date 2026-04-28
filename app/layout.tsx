@@ -15,10 +15,24 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://cubomall.kr";
+const FALLBACK_SITE_URL = "https://cubomall.kr";
+
+function resolveSiteUrl(): URL {
+  const raw = (process.env.NEXT_PUBLIC_SITE_URL ?? FALLBACK_SITE_URL).trim();
+  try {
+    return new URL(raw);
+  } catch {
+    // 환경변수가 잘못된 형식 (https:// 누락 등) 이면 fallback 으로 대체.
+    // 이 안전망 없으면 root layout 의 metadataBase 가 throw → 전 페이지 SSR 깨짐.
+    return new URL(FALLBACK_SITE_URL);
+  }
+}
+
+const SITE_URL_OBJ = resolveSiteUrl();
+const SITE_URL = SITE_URL_OBJ.origin;
 
 export const metadata: Metadata = {
-  metadataBase: new URL(SITE_URL),
+  metadataBase: SITE_URL_OBJ,
   title: {
     default: "CUBO Shop — 피규어, 가방, 봉제인형 등 온라인 도매몰",
     template: "%s | CUBO Shop",

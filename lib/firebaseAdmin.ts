@@ -55,6 +55,13 @@ export function adminAuth(): Auth {
   return getAuth(getAdminApp());
 }
 
+let firestore: Firestore | undefined;
+
 export function adminDb(): Firestore {
-  return getFirestore(getAdminApp());
+  if (firestore) return firestore;
+  firestore = getFirestore(getAdminApp());
+  // undefined 필드를 자동 무시 — TypeScript 의 옵셔널 필드 패턴과 자연스럽게 호환.
+  // (이걸 켜지 않으면 customerCompany 등 옵셔널 필드가 비었을 때 Firestore 가 throw)
+  firestore.settings({ ignoreUndefinedProperties: true });
+  return firestore;
 }
