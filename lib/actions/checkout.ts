@@ -231,7 +231,7 @@ export async function confirmPaymentAction(
 
   // ERP 동기화 webhook (실패해도 결제 결과에는 영향 X)
   await notifyErpOrderSync().catch((err) =>
-    console.warn("[erp-sync] 호출 실패 — ERP cron 으로 자동 복구됩니다.", err),
+    console.warn("[erp-sync] 호출 실패 — 관리자 수동 재동기화 필요할 수 있음", err),
   );
 
   return { success: true, message: "결제 확정되었습니다." };
@@ -239,8 +239,8 @@ export async function confirmPaymentAction(
 
 /**
  * ERP 의 shop-orders sync 엔드포인트 호출 (best-effort).
- * cubopartners.co.kr 의 /api/shop-orders/sync 가 인증 키를 받아
- * 신규 paid 주문을 ERP entity / orders / tax_invoices 로 미러링합니다.
+ * cubo-shop → ERP 자동 반영의 단일 진입점입니다.
+ * 호출 실패해도 결제 결과에는 영향이 없도록 try/catch 처리.
  */
 async function notifyErpOrderSync(): Promise<void> {
   const url = process.env.ERP_SYNC_URL;
