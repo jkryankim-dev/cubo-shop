@@ -16,6 +16,7 @@ import {
 } from "@/lib/cart";
 import { db } from "@/lib/firebase";
 import { formatPriceKRW } from "@/lib/format";
+import { getDisplayPrice } from "@/lib/visibility";
 import type { Product, ShopCartItem } from "@/types";
 
 interface CartLine extends ShopCartItem {
@@ -64,7 +65,7 @@ export default function CartView() {
   }, [refresh]);
 
   const total = lines.reduce(
-    (sum, l) => sum + (l.product?.priceA ?? 0) * l.quantity,
+    (sum, l) => sum + (l.product ? getDisplayPrice(l.product) : 0) * l.quantity,
     0,
   );
 
@@ -97,10 +98,10 @@ export default function CartView() {
                 <Card>
                   <CardContent className="flex items-center gap-4 p-4">
                     <div className="size-20 shrink-0 overflow-hidden rounded-md bg-muted">
-                      {line.product?.image ? (
+                      {line.product?.imageUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
-                          src={line.product.image}
+                          src={line.product.imageUrl}
                           alt={line.product.name}
                           className="h-full w-full object-cover"
                         />
@@ -116,7 +117,7 @@ export default function CartView() {
                             {line.product.name}
                           </Link>
                           <p className="mt-1 text-sm font-bold text-brand-pink">
-                            {formatPriceKRW(line.product.priceA ?? 0)}
+                            {formatPriceKRW(getDisplayPrice(line.product))}
                           </p>
                         </>
                       ) : (
@@ -157,7 +158,8 @@ export default function CartView() {
                     <div className="text-right">
                       <p className="text-sm font-bold">
                         {formatPriceKRW(
-                          (line.product?.priceA ?? 0) * line.quantity,
+                          (line.product ? getDisplayPrice(line.product) : 0) *
+                            line.quantity,
                         )}
                       </p>
                       <Button

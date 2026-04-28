@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
+import { notFound } from "next/navigation";
 import { doc, getDoc } from "firebase/firestore";
 
 import { Button } from "@/components/ui/button";
@@ -9,6 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { db } from "@/lib/firebase";
 import { addToCart } from "@/lib/cart";
 import { formatPriceKRW } from "@/lib/format";
+import { getDisplayPrice, isShoppableProduct } from "@/lib/visibility";
 import type { Product } from "@/types";
 
 export default function ProductDetailPage({
@@ -33,15 +35,16 @@ export default function ProductDetailPage({
         const snap = await getDoc(doc(db, "products", id));
         if (cancelled) return;
         if (!snap.exists()) {
-          setError("존재하지 않는 상품입니다.");
-        } else {
-          const data = snap.data() as Product;
-          if (data.isDeleted || data.hidden) {
-            setError("표시할 수 없는 상품입니다.");
-          } else {
-            setProduct({ ...data, id: snap.id });
-          }
+          notFound();
+          return;
         }
+        const data = { id: snap.id, ...snap.data() } as Product;
+        // 'ON' 태그 없거나 hidden/isDeleted 면 직접 URL 진입도 차단
+        if (!isShoppableProduct(data)) {
+          notFound();
+          return;
+        }
+        setProduct(data);
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "상품 로드 실패");
@@ -79,9 +82,10 @@ export default function ProductDetailPage({
     );
   }
 
-  const mainImage = product.image ?? product.images?.[0];
+  const mainImage = product.imageUrl;
   const detailImages = product.detailImages ?? [];
   const soldOut = (product.stock ?? 0) <= 0;
+  const price = getDisplayPrice(product);
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
@@ -110,14 +114,12 @@ export default function ProductDetailPage({
           <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
             {product.name}
           </h1>
-          <p className="text-3xl font-extrabold text-brand-pink">
-            {formatPriceKRW(product.priceA ?? 0)}
-          </p>
-          {product.description && (
-            <p className="text-sm leading-6 text-foreground/80">
-              {product.description}
-            </p>
+          {product.spec && (
+            <p className="text-sm text-muted-foreground">{product.spec}</p>
           )}
+          <p className="text-3xl font-extrabold text-brand-pink">
+            {formatPriceKRW(price)}
+          </p>
 
           <Separator />
 

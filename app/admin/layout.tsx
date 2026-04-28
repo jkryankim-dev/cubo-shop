@@ -11,8 +11,8 @@ import {
   LogOut,
   Settings,
   ShoppingBag,
+  Tag,
   UserCog,
-  Users,
 } from "lucide-react";
 
 import { RequireAuth } from "@/components/auth/require-auth";
@@ -41,6 +41,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     title: "상품",
     items: [
       { href: "/admin/listings", label: "상품 노출 관리", icon: Boxes },
+      { href: "/admin/products-status", label: "ON 태그 현황", icon: Tag },
     ],
   },
   {

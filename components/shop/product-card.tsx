@@ -2,10 +2,11 @@ import Link from "next/link";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { formatPriceKRW } from "@/lib/format";
+import { getDisplayPrice } from "@/lib/visibility";
 import type { Product } from "@/types";
 
 export function ProductCard({ product }: { product: Product }) {
-  const image = product.image ?? product.images?.[0];
+  const image = product.imageUrl;
   const soldOut = (product.stock ?? 0) <= 0;
 
   return (
@@ -38,7 +39,7 @@ export function ProductCard({ product }: { product: Product }) {
             {product.name}
           </p>
           <p className="text-base font-bold text-brand-pink">
-            {formatPriceKRW(product.priceA ?? 0)}
+            {formatPriceKRW(getDisplayPrice(product))}
           </p>
         </CardContent>
       </Card>

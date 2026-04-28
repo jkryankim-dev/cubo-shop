@@ -10,17 +10,19 @@ import { ThemeToggle } from "@/components/shop/theme-toggle";
 import { useAuth } from "@/components/auth/auth-provider";
 import { signOut } from "@/lib/auth";
 import { getCartItems } from "@/lib/cart";
+import { listCollections } from "@/lib/collections";
 import { cn } from "@/lib/utils";
+import type { ShopCollection } from "@/types";
 
-const NAV_ITEMS = [
+const STATIC_NAV_ITEMS = [
   { href: "/", label: "홈" },
-  { href: "/products", label: "상품" },
-  { href: "/cart", label: "장바구니" },
+  { href: "/products", label: "전체 상품" },
 ];
 
 export function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [cartCount, setCartCount] = useState(0);
+  const [collections, setCollections] = useState<ShopCollection[]>([]);
   const { user, profile, admin, loading } = useAuth();
 
   useEffect(() => {
@@ -37,6 +39,27 @@ export function Header() {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    listCollections({ publicOnly: true })
+      .then((items) => {
+        if (!cancelled) setCollections(items);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const navItems = [
+    ...STATIC_NAV_ITEMS,
+    ...collections.map((c) => ({
+      href: `/collections/${c.id}`,
+      label: c.name,
+    })),
+    { href: "/cart", label: "장바구니" },
+  ];
+
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
@@ -45,7 +68,7 @@ export function Header() {
         </Link>
 
         <nav className="hidden md:flex md:items-center md:gap-6">
-          {NAV_ITEMS.map((item) => (
+          {navItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}
@@ -132,7 +155,7 @@ export function Header() {
         )}
       >
         <nav className="mx-auto flex max-w-6xl flex-col px-4 py-2 sm:px-6">
-          {NAV_ITEMS.map((item) => (
+          {navItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}

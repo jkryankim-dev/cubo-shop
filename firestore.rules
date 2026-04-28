@@ -62,7 +62,15 @@ service cloud.firestore {
 
     // -------- shop_listings/{productId} --------
     // 누구나 읽기 (쇼핑몰 노출용). 쓰기는 관리자만.
+    // (현재 폐기됨 — 'ON' 태그로 대체. 컬렉션은 그대로 유지하되 사용 안 함)
     match /shop_listings/{productId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // -------- shop_collections/{collectionId} --------
+    // 큐레이션 페이지 (Event/봉제인형 등). 누구나 읽기, 관리자만 쓰기.
+    match /shop_collections/{collectionId} {
       allow read: if true;
       allow write: if isAdmin();
     }
