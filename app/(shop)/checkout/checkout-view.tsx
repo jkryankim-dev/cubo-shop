@@ -74,6 +74,7 @@ export default function CheckoutView() {
   const [memo, setMemo] = useState("");
   const [postcodeOpen, setPostcodeOpen] = useState(false);
   const [sameAsBuyer, setSameAsBuyer] = useState(true);
+  const [paymentMethod, setPaymentMethod] = useState<"CARD" | "VIRTUAL_ACCOUNT">("CARD");
 
   // 회원 프로필 → 폼 초기 채움
   useEffect(() => {
@@ -219,9 +220,9 @@ export default function CheckoutView() {
       );
       const toss = await loadTossPayments(TOSS_CLIENT_KEY);
       const payment = toss.payment({ customerKey: ANONYMOUS });
-      await payment.requestPayment({
-        method: "CARD",
-        amount: { currency: "KRW", value: result.data.amount },
+
+      const baseRequest = {
+        amount: { currency: "KRW" as const, value: result.data.amount },
         orderId: result.data.orderId,
         orderName: result.data.orderName,
         successUrl: `${window.location.origin}/order/success`,
@@ -229,7 +230,24 @@ export default function CheckoutView() {
         customerEmail: buyerEmail.trim() || undefined,
         customerName: buyerName.trim() || undefined,
         customerMobilePhone: buyerPhone.replace(/-/g, "") || undefined,
-      });
+      };
+
+      if (paymentMethod === "VIRTUAL_ACCOUNT") {
+        await payment.requestPayment({
+          method: "VIRTUAL_ACCOUNT",
+          ...baseRequest,
+          virtualAccount: {
+            cashReceipt: { type: "소득공제" },
+            useEscrow: false,
+            validHours: 6, // 입금 대기 6시간 (cubo-shop 정책과 일치)
+          },
+        });
+      } else {
+        await payment.requestPayment({
+          method: "CARD",
+          ...baseRequest,
+        });
+      }
       clearCart();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "결제 요청 실패");
@@ -425,6 +443,44 @@ export default function CheckoutView() {
                 placeholder="문 앞에 놓아주세요 등"
               />
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">결제 수단</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setPaymentMethod("CARD")}
+                className={`rounded-md border-2 p-3 text-sm font-medium transition-colors ${
+                  paymentMethod === "CARD"
+                    ? "border-brand-pink bg-brand-pink/5"
+                    : "border-border hover:bg-accent/40"
+                }`}
+              >
+                💳 신용·체크카드
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaymentMethod("VIRTUAL_ACCOUNT")}
+                className={`rounded-md border-2 p-3 text-sm font-medium transition-colors ${
+                  paymentMethod === "VIRTUAL_ACCOUNT"
+                    ? "border-brand-pink bg-brand-pink/5"
+                    : "border-border hover:bg-accent/40"
+                }`}
+              >
+                🏦 가상계좌 (무통장입금)
+              </button>
+            </div>
+            {paymentMethod === "VIRTUAL_ACCOUNT" && (
+              <p className="mt-3 text-xs text-muted-foreground">
+                결제하기 → 토스에서 가상계좌 발급 → <strong>6시간 이내</strong> 입금
+                완료해야 주문이 확정됩니다. 미입금 시 자동 취소됩니다.
+              </p>
+            )}
           </CardContent>
         </Card>
 
