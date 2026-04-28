@@ -91,7 +91,8 @@ export function Footer() {
         </div>
 
         <div className="mt-8 border-t border-border pt-6 text-xs text-muted-foreground">
-          © {new Date().getFullYear()} CUBO Shop. All rights reserved.
+          © {new Date().getFullYear()} {BUSINESS_INFO.name}. All rights
+          reserved.
         </div>
       </div>
     </footer>
