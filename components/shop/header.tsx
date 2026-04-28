@@ -51,7 +51,23 @@ export function Header() {
     };
   }, []);
 
+  // 데스크톱: 정적 + 컬렉션 (5개 이상이면 드롭다운으로)
+  const collectionsAsDropdown = collections.length > 4;
+  const visibleCollections = collectionsAsDropdown
+    ? []
+    : collections.map((c) => ({
+        href: `/collections/${c.id}`,
+        label: c.name,
+      }));
+
   const navItems = [
+    ...STATIC_NAV_ITEMS,
+    ...visibleCollections,
+    { href: "/cart", label: "장바구니" },
+  ];
+
+  // 모바일: 모든 컬렉션을 펼침
+  const mobileNavItems = [
     ...STATIC_NAV_ITEMS,
     ...collections.map((c) => ({
       href: `/collections/${c.id}`,
@@ -77,6 +93,30 @@ export function Header() {
               {item.label}
             </Link>
           ))}
+          {collectionsAsDropdown && (
+            <div className="group relative">
+              <button
+                type="button"
+                className="text-sm font-medium text-foreground/80 transition-colors hover:text-brand-pink"
+              >
+                카테고리 ▾
+              </button>
+              <div className="invisible absolute left-0 top-full z-50 min-w-44 rounded-md border border-border bg-background opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100">
+                <ul className="py-1">
+                  {collections.map((c) => (
+                    <li key={c.id}>
+                      <Link
+                        href={`/collections/${c.id}`}
+                        className="block px-3 py-2 text-sm hover:bg-accent/40"
+                      >
+                        {c.name}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
           {admin && (
             <Link
               href="/admin"
@@ -155,7 +195,7 @@ export function Header() {
         )}
       >
         <nav className="mx-auto flex max-w-6xl flex-col px-4 py-2 sm:px-6">
-          {navItems.map((item) => (
+          {mobileNavItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}

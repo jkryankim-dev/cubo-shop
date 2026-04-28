@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { collection, getDocs } from "firebase/firestore";
 import { Eye, EyeOff, Plus, Star } from "lucide-react";
 import { toast } from "sonner";
 
@@ -9,25 +10,37 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { listCollections } from "@/lib/collections";
-import type { ShopCollection } from "@/types";
+import { db } from "@/lib/firebase";
+import type { Product, ShopCollection } from "@/types";
 
 export default function AdminCollectionsPage() {
   const [collections, setCollections] = useState<ShopCollection[]>([]);
+  const [productMap, setProductMap] = useState<Map<string, Product>>(new Map());
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
-    listCollections()
-      .then((items) => {
-        if (!cancelled) setCollections(items);
-      })
-      .catch((err) => {
+    async function load() {
+      try {
+        const [items, productSnap] = await Promise.all([
+          listCollections(),
+          getDocs(collection(db, "products")),
+        ]);
+        if (cancelled) return;
+        setCollections(items);
+        const map = new Map<string, Product>();
+        productSnap.docs.forEach((d) => {
+          map.set(d.id, { id: d.id, ...d.data() } as Product);
+        });
+        setProductMap(map);
+      } catch (err) {
         if (!cancelled)
           toast.error(err instanceof Error ? err.message : "조회 실패");
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setLoading(false);
-      });
+      }
+    }
+    load();
     return () => {
       cancelled = true;
     };
@@ -61,7 +74,7 @@ export default function AdminCollectionsPage() {
       {loading ? (
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton key={i} className="h-32 w-full" />
+            <Skeleton key={i} className="h-44 w-full" />
           ))}
         </div>
       ) : collections.length === 0 ? (
@@ -84,38 +97,83 @@ export default function AdminCollectionsPage() {
       ) : (
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
           {collections.map((c) => (
-            <Link key={c.id} href={`/admin/listings/${c.id}`}>
-              <Card className="h-full transition-shadow hover:shadow-md">
-                <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
-                  <CardTitle className="text-base">
-                    {c.name}
-                    {c.featured && (
-                      <Star className="ml-1.5 inline size-3.5 fill-brand-pink text-brand-pink" />
-                    )}
-                  </CardTitle>
-                  {c.isPublic ? (
-                    <Eye className="size-4 text-brand-mint" />
-                  ) : (
-                    <EyeOff className="size-4 text-muted-foreground" />
-                  )}
-                </CardHeader>
-                <CardContent className="space-y-1 text-xs text-muted-foreground">
-                  <p className="font-mono">/{c.id}</p>
-                  <p>
-                    상품 <strong>{c.productIds.length}</strong>개 · 정렬{" "}
-                    {c.order}
-                  </p>
-                  {c.description && (
-                    <p className="line-clamp-2 text-foreground/80">
-                      {c.description}
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
-            </Link>
+            <CollectionCard
+              key={c.id}
+              collection={c}
+              productMap={productMap}
+            />
           ))}
         </div>
       )}
     </div>
+  );
+}
+
+function CollectionCard({
+  collection: c,
+  productMap,
+}: {
+  collection: ShopCollection;
+  productMap: Map<string, Product>;
+}) {
+  const previews = useMemo(() => {
+    const arr: Product[] = [];
+    for (const pid of c.productIds.slice(0, 4)) {
+      const p = productMap.get(pid);
+      if (p) arr.push(p);
+    }
+    return arr;
+  }, [c.productIds, productMap]);
+
+  return (
+    <Link href={`/admin/listings/${c.id}`}>
+      <Card className="h-full overflow-hidden transition-shadow hover:shadow-md">
+        <div className="grid grid-cols-4 gap-px bg-border">
+          {Array.from({ length: 4 }).map((_, i) => {
+            const p = previews[i];
+            return (
+              <div
+                key={i}
+                className="aspect-square bg-background"
+              >
+                {p?.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={p.imageUrl}
+                    alt={p.name}
+                    className="h-full w-full object-cover"
+                    loading="lazy"
+                  />
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+        <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
+          <CardTitle className="text-base">
+            {c.name}
+            {c.featured && (
+              <Star className="ml-1.5 inline size-3.5 fill-brand-pink text-brand-pink" />
+            )}
+          </CardTitle>
+          {c.isPublic ? (
+            <Eye className="size-4 text-brand-mint" />
+          ) : (
+            <EyeOff className="size-4 text-muted-foreground" />
+          )}
+        </CardHeader>
+        <CardContent className="space-y-1 text-xs text-muted-foreground">
+          <p className="font-mono">/{c.id}</p>
+          <p>
+            상품 <strong>{c.productIds.length}</strong>개 · 정렬 {c.order}
+          </p>
+          {c.description && (
+            <p className="line-clamp-2 text-foreground/80">
+              {c.description}
+            </p>
+          )}
+        </CardContent>
+      </Card>
+    </Link>
   );
 }

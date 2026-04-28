@@ -15,13 +15,34 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://cubomall.kr";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: {
     default: "CUBO Shop — 피규어, 가방, 봉제인형 등 온라인 도매몰",
     template: "%s | CUBO Shop",
   },
   description:
     "피규어, 가방, 봉제인형 등 인형뽑기 매장에 필요한 인기 캐릭터 상품을 도매가로 공급합니다. 사업자 회원 도매 단가 자동 적용.",
+  openGraph: {
+    type: "website",
+    locale: "ko_KR",
+    url: SITE_URL,
+    siteName: "CUBO Shop",
+    title: "CUBO Shop — 피규어, 가방, 봉제인형 등 온라인 도매몰",
+    description:
+      "피규어, 가방, 봉제인형 등 인형뽑기 매장에 필요한 인기 캐릭터 상품을 도매가로.",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "CUBO Shop — 피규어, 가방, 봉제인형 등 온라인 도매몰",
+    description:
+      "피규어, 가방, 봉제인형 등 인형뽑기 매장에 필요한 인기 캐릭터 상품을 도매가로.",
+  },
+  alternates: {
+    canonical: SITE_URL,
+  },
 };
 
 export default function RootLayout({
