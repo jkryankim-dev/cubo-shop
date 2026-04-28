@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { doc, getDoc } from "firebase/firestore";
-import { loadTossPayments } from "@tosspayments/payment-sdk";
+import { ANONYMOUS, loadTossPayments } from "@tosspayments/tosspayments-sdk";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -151,16 +151,21 @@ export default function CheckoutView() {
         return;
       }
 
-      // 토스페이먼츠 결제창 호출
+      // 토스페이먼츠 v2 SDK — 결제창 호출
+      // 회원 식별이 필요한 자동결제 등에서는 customerKey 에 user.uid 사용 가능.
+      // 일반 결제는 ANONYMOUS 로 충분.
       const toss = await loadTossPayments(TOSS_CLIENT_KEY);
-      await toss.requestPayment("카드", {
-        amount: result.data.amount,
+      const payment = toss.payment({ customerKey: ANONYMOUS });
+      await payment.requestPayment({
+        method: "CARD",
+        amount: { currency: "KRW", value: result.data.amount },
         orderId: result.data.orderId,
         orderName: result.data.orderName,
-        customerName: profile?.name ?? "",
-        customerEmail: profile?.email ?? "",
         successUrl: `${window.location.origin}/order/success`,
         failUrl: `${window.location.origin}/order/fail`,
+        customerEmail: profile?.email ?? undefined,
+        customerName: profile?.name ?? undefined,
+        customerMobilePhone: profile?.phone?.replace(/-/g, "") || undefined,
       });
       // requestPayment 가 페이지 이동을 일으키므로 아래 코드는 보통 도달하지 않음
       clearCart();
