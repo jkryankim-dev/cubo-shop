@@ -6,6 +6,7 @@ import DaumPostcode, { type Address } from "react-daum-postcode";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { formatBusinessRegNo } from "@/lib/format";
 import type { TaxInvoiceInfo, ShippingAddress } from "@/types";
 
 export interface TaxInvoiceFormSyncSource {
@@ -15,6 +16,7 @@ export interface TaxInvoiceFormSyncSource {
 }
 
 export interface TaxInvoiceFormValue {
+  businessRegNo: string;
   ceo: string;
   companyName: string;
   industry: string;
@@ -26,6 +28,7 @@ export interface TaxInvoiceFormValue {
 }
 
 export const EMPTY_TAX_INVOICE: TaxInvoiceFormValue = {
+  businessRegNo: "",
   ceo: "",
   companyName: "",
   industry: "",
@@ -41,6 +44,7 @@ export function fromTaxInvoiceInfo(
 ): TaxInvoiceFormValue {
   if (!info) return EMPTY_TAX_INVOICE;
   return {
+    businessRegNo: info.businessRegNo,
     ceo: info.ceo,
     companyName: info.companyName,
     industry: info.industry,
@@ -54,6 +58,7 @@ export function fromTaxInvoiceInfo(
 
 export function toTaxInvoiceInfo(v: TaxInvoiceFormValue): TaxInvoiceInfo {
   return {
+    businessRegNo: v.businessRegNo.trim(),
     ceo: v.ceo.trim(),
     companyName: v.companyName.trim(),
     industry: v.industry.trim(),
@@ -69,7 +74,8 @@ export function toTaxInvoiceInfo(v: TaxInvoiceFormValue): TaxInvoiceInfo {
 
 export function isTaxInvoiceFilled(v: TaxInvoiceFormValue): boolean {
   return Boolean(
-    v.ceo.trim() &&
+    v.businessRegNo.replace(/[^0-9]/g, "").length === 10 &&
+      v.ceo.trim() &&
       v.companyName.trim() &&
       v.industry.trim() &&
       v.businessType.trim() &&
@@ -142,6 +148,17 @@ export function TaxInvoiceForm({
 
   return (
     <div className="space-y-4">
+      <div className="space-y-1.5">
+        <Label>사업자등록번호</Label>
+        <Input
+          value={value.businessRegNo}
+          onChange={(e) => set("businessRegNo", formatBusinessRegNo(e.target.value))}
+          placeholder="000-00-00000"
+          maxLength={12}
+          inputMode="numeric"
+        />
+      </div>
+
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
           <Label>대표자명</Label>

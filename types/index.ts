@@ -105,6 +105,8 @@ export interface TaxInvoiceAddress {
 }
 
 export interface TaxInvoiceInfo {
+  /** 사업자등록번호 (000-00-00000) */
+  businessRegNo: string;
   /** 대표자명 */
   ceo: string;
   /** 상호명 */
