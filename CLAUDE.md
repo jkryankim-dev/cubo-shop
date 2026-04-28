@@ -79,6 +79,11 @@ cuboerp 와 **동일한 Firebase 프로젝트** 를 공유합니다.
 - **상태 흐름**: `pending` → `paid` → `preparing` → `shipped` → `delivered` (또는 `cancelled` / `refunded`)
 - **무통장 입금**: 관리자 페이지에서 수동으로 paid 마킹 가능
 
+## 토스페이먼츠 참고 문서
+- 결제 PG (토스페이먼츠) 관련 코드 작성 시 **`토스페이먼츠.md`** 의 내용을 우선 참고
+- API 키, 테스트 환경, 에러 재현 (`TossPayments-Test-Code` 헤더), 방화벽 IP 화이트리스트, 지원 브라우저 등 정리되어 있음
+- 새 토스 가이드 자료가 들어오면 `토스페이먼츠.md` 에 누적 정리
+
 ## ERP 동기화
 - cubo-shop 의 `shop_orders` 가 단일 진실. cuboerp 가 onSnapshot 으로 read.
 - cuboerp 의 주문 관리 화면 표시명: **"쿠보몰 (주문자 상호명)"**
