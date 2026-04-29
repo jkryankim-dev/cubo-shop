@@ -132,16 +132,19 @@ export async function sendPaymentConfirmedAlimtalk(
   order: ShopOrder,
 ): Promise<void> {
   if (!order.customerPhone) return;
-  const msg = `[CUBO MALL] 결제가 완료되었습니다.
+  const msg = `[CUBO MALL] 결제 완료
 
-주문번호: ${shortOrderId(order.id)}
+${order.customerName}님, cubomall.kr 에서 주문하신 건의 결제가 완료되었습니다.
+
+▷ 주문번호: ${shortOrderId(order.id)}
+▷ 주문상품:
 ${summarizeItems(order.items)}
+▷ 결제금액: ${formatPriceKRW(order.totalAmount)}
 
-총 금액: ${formatPriceKRW(order.totalAmount)}
+평일 오후 2시 이전 결제 건은 당일 출고됩니다.
 
-빠른 시일 내 출고하겠습니다.
-
-문의: 010-4557-4183`;
+▷ 마이페이지: cubomall.kr/mypage/orders
+▷ 문의: 010-4557-4183`;
 
   await sendAlimtalk(
     {
@@ -157,15 +160,18 @@ ${summarizeItems(order.items)}
 /** 배송 시작 알림 (status: shipped + 송장번호 입력) */
 export async function sendShippedAlimtalk(order: ShopOrder): Promise<void> {
   if (!order.customerPhone) return;
-  const msg = `[CUBO MALL] 상품이 출고되었습니다.
+  const msg = `[CUBO MALL] 상품 출고
 
-주문번호: ${shortOrderId(order.id)}
-택배사: ${order.carrier ?? "-"}
-송장번호: ${order.trackingNumber ?? "-"}
+${order.customerName}님, 주문하신 상품이 출고되었습니다.
+
+▷ 주문번호: ${shortOrderId(order.id)}
+▷ 택배사: ${order.carrier ?? "-"}
+▷ 송장번호: ${order.trackingNumber ?? "-"}
 
 배송 조회는 택배사 사이트에서 확인해주세요.
 
-문의: 010-4557-4183`;
+▷ 마이페이지: cubomall.kr/mypage/orders
+▷ 문의: 010-4557-4183`;
 
   await sendAlimtalk(
     {
@@ -181,13 +187,15 @@ export async function sendShippedAlimtalk(order: ShopOrder): Promise<void> {
 /** 배송 완료 알림 (status: delivered) */
 export async function sendDeliveredAlimtalk(order: ShopOrder): Promise<void> {
   if (!order.customerPhone) return;
-  const msg = `[CUBO MALL] 상품이 배송 완료되었습니다.
+  const msg = `[CUBO MALL] 배송 완료
 
-주문번호: ${shortOrderId(order.id)}
+${order.customerName}님, 주문하신 상품이 배송 완료되었습니다.
 
-이용해주셔서 감사합니다.
+▷ 주문번호: ${shortOrderId(order.id)}
 
-문의: 010-4557-4183`;
+쿠보몰을 이용해주셔서 감사합니다.
+
+▷ 문의: 010-4557-4183`;
 
   await sendAlimtalk(
     {
@@ -206,15 +214,17 @@ export async function sendCancelledAlimtalk(
   reason: string,
 ): Promise<void> {
   if (!order.customerPhone) return;
-  const msg = `[CUBO MALL] 주문이 취소되었습니다.
+  const msg = `[CUBO MALL] 주문 취소
 
-주문번호: ${shortOrderId(order.id)}
-취소사유: ${reason}
-환불금액: ${formatPriceKRW(order.totalAmount)}
+${order.customerName}님, 주문이 취소되었습니다.
+
+▷ 주문번호: ${shortOrderId(order.id)}
+▷ 취소사유: ${reason}
+▷ 환불금액: ${formatPriceKRW(order.totalAmount)}
 
 결제 수단별 환불 처리는 영업일 기준 1~3일 소요됩니다.
 
-문의: 010-4557-4183`;
+▷ 문의: 010-4557-4183`;
 
   await sendAlimtalk(
     {
@@ -230,14 +240,16 @@ export async function sendCancelledAlimtalk(
 /** 환불 완료 알림 (status: refunded) */
 export async function sendRefundedAlimtalk(order: ShopOrder): Promise<void> {
   if (!order.customerPhone) return;
-  const msg = `[CUBO MALL] 환불이 완료되었습니다.
+  const msg = `[CUBO MALL] 환불 완료
 
-주문번호: ${shortOrderId(order.id)}
-환불금액: ${formatPriceKRW(order.totalAmount)}
+${order.customerName}님, 환불이 완료되었습니다.
+
+▷ 주문번호: ${shortOrderId(order.id)}
+▷ 환불금액: ${formatPriceKRW(order.totalAmount)}
 
 결제 수단에 따라 영업일 기준 1~3일 내 입금됩니다.
 
-문의: 010-4557-4183`;
+▷ 문의: 010-4557-4183`;
 
   await sendAlimtalk(
     {
