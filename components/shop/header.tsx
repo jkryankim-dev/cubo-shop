@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { LogIn, LogOut, Menu, ShoppingCart, User, X } from "lucide-react";
+import { LogIn, LogOut, Menu, Search, ShoppingCart, User, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { CuboLogo } from "@/components/shop/logo";
@@ -128,6 +128,11 @@ export function Header() {
         </nav>
 
         <div className="flex items-center gap-1 md:gap-2">
+          <Link href="/search" aria-label="검색">
+            <Button variant="ghost" size="icon">
+              <Search />
+            </Button>
+          </Link>
           <ThemeToggle />
           <Link href="/cart" className="relative" aria-label="장바구니">
             <Button variant="ghost" size="icon">

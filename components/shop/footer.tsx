@@ -46,12 +46,14 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <a
-                  href={`mailto:${BUSINESS_INFO.email}`}
-                  className="hover:text-brand-pink"
-                >
+                <Link href="/contact" className="hover:text-brand-pink">
                   문의하기
-                </a>
+                </Link>
+              </li>
+              <li>
+                <Link href="/faq" className="hover:text-brand-pink">
+                  자주 묻는 질문
+                </Link>
               </li>
             </ul>
           </div>

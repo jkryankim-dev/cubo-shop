@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "sonner";
 import "./globals.css";
+import { Analytics } from "@/components/shop/analytics";
 import { AuthProvider } from "@/components/auth/auth-provider";
 
 const geistSans = Geist({
@@ -71,6 +72,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
+        <Analytics />
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
