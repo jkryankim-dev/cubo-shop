@@ -16,7 +16,9 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import {
   sendCancelledAlimtalk,
   sendPaymentConfirmedAlimtalk,
+  sendVirtualAccountIssuedAlimtalk,
 } from "@/lib/alimtalk";
+import { bankNameOf } from "@/lib/banks";
 import type {
   Product,
   ShippingAddress,
@@ -249,8 +251,47 @@ export async function confirmPaymentAction(
   const tossData = (await res.json()) as {
     method?: string;
     paymentKey?: string;
+    status?: string;
+    virtualAccount?: {
+      accountNumber?: string;
+      bankCode?: string;
+      dueDate?: string;
+    };
   };
 
+  // 가상계좌 발급 — 입금 대기 (status: WAITING_FOR_DEPOSIT)
+  if (
+    tossData.status === "WAITING_FOR_DEPOSIT" &&
+    tossData.virtualAccount?.accountNumber
+  ) {
+    const va = tossData.virtualAccount;
+    const virtualAccount = {
+      bankCode: va.bankCode,
+      bankName: bankNameOf(va.bankCode),
+      accountNumber: va.accountNumber,
+      dueDate: va.dueDate,
+    };
+    await orderRef.update({
+      paymentId: tossData.paymentKey ?? input.paymentKey,
+      paymentMethod: tossData.method ?? "VIRTUAL_ACCOUNT",
+      virtualAccount,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    await sendVirtualAccountIssuedAlimtalk({
+      ...order,
+      paymentMethod: "VIRTUAL_ACCOUNT",
+      virtualAccount,
+    }).catch((err) =>
+      console.warn("[alimtalk] virtual-account-issued 발송 실패", err),
+    );
+    return {
+      success: true,
+      message:
+        "가상계좌가 발급되었습니다. 6시간 이내 입금해주시면 주문이 확정됩니다.",
+    };
+  }
+
+  // 그 외 — DONE 등 즉시 결제 확정 (카드 등)
   await orderRef.update({
     status: "paid",
     paymentId: tossData.paymentKey ?? input.paymentKey,
@@ -450,8 +491,9 @@ export async function adminUpdateOrderAction(
 
   // 상태 전환 알림톡 (실패해도 무시)
   try {
-    const { sendShippedAlimtalk, sendDeliveredAlimtalk, sendRefundedAlimtalk } =
-      await import("@/lib/alimtalk");
+    const { sendShippedAlimtalk, sendRefundedAlimtalk } = await import(
+      "@/lib/alimtalk"
+    );
     const transitioned = before.status !== after.status;
     const trackingAdded =
       input.trackingNumber && before.trackingNumber !== input.trackingNumber;
@@ -460,11 +502,10 @@ export async function adminUpdateOrderAction(
       (after.status === "shipped" && trackingAdded)
     ) {
       await sendShippedAlimtalk(after);
-    } else if (transitioned && after.status === "delivered") {
-      await sendDeliveredAlimtalk(after);
     } else if (transitioned && after.status === "refunded") {
       await sendRefundedAlimtalk(after);
     }
+    // delivered 알림톡은 택배사가 발송하므로 cubo-shop 측 X
   } catch (err) {
     console.warn("[alimtalk] status-transition 발송 실패", err);
   }

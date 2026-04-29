@@ -147,6 +147,17 @@ export type ShopOrderStatus =
   | "cancelled"
   | "refunded";
 
+export interface ShopOrderVirtualAccount {
+  /** 토스 응답의 은행 코드 (예: "20" = 국민) */
+  bankCode?: string;
+  /** 한국어 은행명 (lib/banks.ts 매핑) */
+  bankName?: string;
+  /** 발급된 가상계좌 번호 */
+  accountNumber: string;
+  /** 입금 기한 ISO datetime (토스 응답 그대로) */
+  dueDate?: string;
+}
+
 export interface ShopOrderItem {
   productId: string;
   /** 상품명 스냅샷 (ERP productName 과 매핑) */
@@ -183,6 +194,8 @@ export interface ShopOrder {
   paymentId?: string;
   /** 결제 수단 (CARD / TRANSFER / VIRTUAL_ACCOUNT 등) */
   paymentMethod?: string;
+  /** 가상계좌 발급 정보 (paymentMethod === "VIRTUAL_ACCOUNT" 일 때) */
+  virtualAccount?: ShopOrderVirtualAccount;
   /** 입금대기 만료 시각 (createdAt + 6시간). 경과 시 자동 cancelled */
   expiresAt?: Timestamp;
   /** 무통장입금 등 수동 입금 마킹 시 (관리자 uid) */

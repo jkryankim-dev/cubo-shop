@@ -127,6 +127,49 @@ function envOrEmpty(key: string): string {
   return process.env[key] ?? "";
 }
 
+/** 가상계좌 발급 안내 (입금 대기) */
+export async function sendVirtualAccountIssuedAlimtalk(
+  order: ShopOrder,
+): Promise<void> {
+  if (!order.customerPhone) return;
+  if (!order.virtualAccount) return;
+
+  const va = order.virtualAccount;
+  const dueDate = va.dueDate
+    ? new Date(va.dueDate).toLocaleString("ko-KR", {
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "발급 후 6시간";
+  const account = `${va.bankName ?? ""} ${va.accountNumber}`.trim();
+
+  const msg = `[CUBO MALL] 입금 대기
+
+${order.customerName}님, 가상계좌가 발급되었습니다.
+아래 계좌로 기한 내 입금해주시면 주문이 확정됩니다.
+
+▷ 주문번호: ${shortOrderId(order.id)}
+▷ 입금금액: ${formatPriceKRW(order.totalAmount)}
+▷ 입금계좌: ${account}
+▷ 입금기한: ${dueDate}
+
+기한 내 미입금 시 자동 취소되며 재고가 복원됩니다.
+
+▷ 마이페이지: cubomall.kr/mypage/orders`;
+
+  await sendAlimtalk(
+    {
+      templateCode: envOrEmpty("POPBILL_TEMPLATE_VIRTUAL_ACCOUNT_ISSUED"),
+      receiverPhone: order.customerPhone,
+      receiverName: order.customerName,
+      msg,
+    },
+    { orderId: order.id, event: "virtual-account-issued" },
+  );
+}
+
 /** 결제 확정 알림 (status: pending → paid) */
 export async function sendPaymentConfirmedAlimtalk(
   order: ShopOrder,
@@ -143,8 +186,7 @@ ${summarizeItems(order.items)}
 
 평일 오후 2시 이전 결제 건은 당일 출고됩니다.
 
-▷ 마이페이지: cubomall.kr/mypage/orders
-▷ 문의: 010-4557-4183`;
+▷ 마이페이지: cubomall.kr/mypage/orders`;
 
   await sendAlimtalk(
     {
@@ -170,8 +212,7 @@ ${order.customerName}님, 주문하신 상품이 출고되었습니다.
 
 배송 조회는 택배사 사이트에서 확인해주세요.
 
-▷ 마이페이지: cubomall.kr/mypage/orders
-▷ 문의: 010-4557-4183`;
+▷ 마이페이지: cubomall.kr/mypage/orders`;
 
   await sendAlimtalk(
     {
@@ -184,29 +225,8 @@ ${order.customerName}님, 주문하신 상품이 출고되었습니다.
   );
 }
 
-/** 배송 완료 알림 (status: delivered) */
-export async function sendDeliveredAlimtalk(order: ShopOrder): Promise<void> {
-  if (!order.customerPhone) return;
-  const msg = `[CUBO MALL] 배송 완료
-
-${order.customerName}님, 주문하신 상품이 배송 완료되었습니다.
-
-▷ 주문번호: ${shortOrderId(order.id)}
-
-쿠보몰을 이용해주셔서 감사합니다.
-
-▷ 문의: 010-4557-4183`;
-
-  await sendAlimtalk(
-    {
-      templateCode: envOrEmpty("POPBILL_TEMPLATE_DELIVERED"),
-      receiverPhone: order.customerPhone,
-      receiverName: order.customerName,
-      msg,
-    },
-    { orderId: order.id, event: "delivered" },
-  );
-}
+// 배송 완료 알림은 택배사가 발송하므로 cubo-shop 측 발송 X.
+// (필요해지면 sendDeliveredAlimtalk 함수 + POPBILL_TEMPLATE_DELIVERED 환경변수 부활)
 
 /** 주문 취소 알림 */
 export async function sendCancelledAlimtalk(
@@ -222,9 +242,7 @@ ${order.customerName}님, 주문이 취소되었습니다.
 ▷ 취소사유: ${reason}
 ▷ 환불금액: ${formatPriceKRW(order.totalAmount)}
 
-결제 수단별 환불 처리는 영업일 기준 1~3일 소요됩니다.
-
-▷ 문의: 010-4557-4183`;
+결제 수단별 환불 처리는 영업일 기준 1~3일 소요됩니다.`;
 
   await sendAlimtalk(
     {
@@ -247,9 +265,7 @@ ${order.customerName}님, 환불이 완료되었습니다.
 ▷ 주문번호: ${shortOrderId(order.id)}
 ▷ 환불금액: ${formatPriceKRW(order.totalAmount)}
 
-결제 수단에 따라 영업일 기준 1~3일 내 입금됩니다.
-
-▷ 문의: 010-4557-4183`;
+결제 수단에 따라 영업일 기준 1~3일 내 입금됩니다.`;
 
   await sendAlimtalk(
     {
