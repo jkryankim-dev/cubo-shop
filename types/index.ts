@@ -40,8 +40,10 @@ export interface Product {
   bundleUnit?: number;
   originalBundleUnit?: number;
   imageUrl?: string;
-  /** 상품 상세 페이지 세로 펼침용 이미지 (ERP 가 추후 추가) */
-  detailImages?: string[];
+  /** 상품 상세 페이지 — 단일 이미지 (Firebase Storage URL, ERP 가 등록) */
+  detailImageUrl?: string;
+  /** 상품 상세 페이지 — 자유 텍스트 (줄바꿈 유지, ERP 가 등록) */
+  detailText?: string;
   tags?: ProductTag[];
   noInvoiceSince?: string;
   hidden?: boolean;

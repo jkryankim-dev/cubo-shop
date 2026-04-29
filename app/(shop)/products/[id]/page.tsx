@@ -101,10 +101,6 @@ export default function ProductDetailPage({
     if (!product) return [] as string[];
     const arr: string[] = [];
     if (product.imageUrl) arr.push(product.imageUrl);
-    // detailImages 의 첫 3장도 갤러리 썸네일에 포함 (선택적)
-    for (const url of product.detailImages?.slice(0, 3) ?? []) {
-      if (!arr.includes(url)) arr.push(url);
-    }
     return arr;
   }, [product]);
 
@@ -133,7 +129,7 @@ export default function ProductDetailPage({
     );
   }
 
-  const detailImages = product.detailImages ?? [];
+  const hasDetail = Boolean(product.detailImageUrl || product.detailText);
   const soldOut = (product.stock ?? 0) <= 0;
   const price = getDisplayPrice(product);
   const subTotal = price * quantity;
@@ -308,30 +304,34 @@ export default function ProductDetailPage({
         </div>
       </div>
 
-      {/* 상품 상세 이미지 (ERP 가 detailImages 채우면 자동 노출) */}
+      {/* 상품 상세 — ERP 가 detailImageUrl/detailText 로 등록한 콘텐츠 */}
       <section className="mt-16">
         <div className="mb-6 flex items-center gap-3">
           <h2 className="text-2xl font-bold tracking-tight">상품 상세</h2>
           <span className="h-px flex-1 bg-border" />
         </div>
-        {detailImages.length > 0 ? (
-          <div className="space-y-3">
-            {detailImages.map((src, idx) => (
+        {hasDetail ? (
+          <div className="space-y-6">
+            {product.detailImageUrl && (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                key={idx}
-                src={src}
-                alt={`${product.name} 상세 ${idx + 1}`}
-                className="w-full"
+                src={product.detailImageUrl}
+                alt={`${product.name} 상세`}
+                className="block w-full"
                 loading="lazy"
               />
-            ))}
+            )}
+            {product.detailText && (
+              <div className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">
+                {product.detailText}
+              </div>
+            )}
           </div>
         ) : (
           <div className="rounded-md border border-dashed border-border bg-muted/30 p-12 text-center">
-            <p className="text-sm font-medium">상세 이미지 등록 예정</p>
+            <p className="text-sm font-medium">상세 콘텐츠 등록 예정</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              ERP 에서 상품 상세 이미지를 등록하면 이 자리에 자동으로 표시됩니다.
+              ERP 에서 상세 이미지/설명을 등록하면 이 자리에 자동으로 표시됩니다.
             </p>
           </div>
         )}
