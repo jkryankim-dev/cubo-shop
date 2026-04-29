@@ -265,10 +265,11 @@ export async function confirmPaymentAction(
     tossData.virtualAccount?.accountNumber
   ) {
     const va = tossData.virtualAccount;
+    const accountNumber = va.accountNumber!; // 위 if 에서 검증
     const virtualAccount = {
       bankCode: va.bankCode,
       bankName: bankNameOf(va.bankCode),
-      accountNumber: va.accountNumber,
+      accountNumber,
       dueDate: va.dueDate,
     };
     await orderRef.update({
