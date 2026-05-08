@@ -1,0 +1,42 @@
+// =====================================================================
+// Firebase Storage Rules — cubo-shop 전용 경로
+//
+// 중요: 이 룰은 cubo-shop 이 관리하는 경로만 다룹니다.
+// ERP 가 관리하는 경로 (예: 상품 이미지) 의 룰은 cuboerp 세션에서 별도로
+// 관리되며, 두 시스템의 룰을 한 파일로 합쳐 Firebase 에 배포해야 합니다.
+//
+// 배포: Firebase 콘솔 → Storage → Rules 에 ERP 룰과 병합 후 배포.
+// =====================================================================
+
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // -------- 공통 헬퍼 --------
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+    function isAdmin() {
+      return isSignedIn() &&
+        firestore.exists(/databases/(default)/documents/shop_admins/$(request.auth.uid));
+    }
+
+    // -------- business-licenses/{uid}/{file} --------
+    // 사업자등록증. 본인만 업로드·열람·삭제. 관리자는 검토용으로 read·delete.
+    // 파일은 PDF / JPEG / PNG 만, 10MB 이하.
+    match /business-licenses/{uid}/{file=**} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow create, update: if isOwner(uid)
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/jpeg|image/png|application/pdf');
+      allow delete: if isOwner(uid) || isAdmin();
+    }
+
+    // 그 외 cubo-shop 이 직접 다루지 않는 경로는 ERP 룰에 의해 결정됨.
+    // 본 파일에서 default 매처를 두지 않음 (ERP 룰과 병합 시 충돌 방지).
+  }
+}
