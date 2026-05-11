@@ -2,12 +2,13 @@ import Link from "next/link";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { formatPriceKRW } from "@/lib/format";
-import { getDisplayPrice } from "@/lib/visibility";
+import { getBundleUnit, getDisplayPrice } from "@/lib/visibility";
 import type { Product } from "@/types";
 
 export function ProductCard({ product }: { product: Product }) {
   const image = product.imageUrl;
   const soldOut = (product.stock ?? 0) <= 0;
+  const bundleUnit = getBundleUnit(product);
 
   return (
     <Link href={`/products/${product.id}`} className="group">
@@ -40,6 +41,11 @@ export function ProductCard({ product }: { product: Product }) {
           </p>
           <p className="text-base font-bold text-brand-pink">
             {formatPriceKRW(getDisplayPrice(product))}
+            {bundleUnit > 1 && (
+              <span className="ml-1 text-xs font-normal text-muted-foreground">
+                / {bundleUnit}개
+              </span>
+            )}
           </p>
         </CardContent>
       </Card>

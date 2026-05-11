@@ -16,7 +16,7 @@ import {
 } from "@/lib/cart";
 import { db } from "@/lib/firebase";
 import { formatPriceKRW } from "@/lib/format";
-import { getDisplayPrice } from "@/lib/visibility";
+import { getBundleUnit, getDisplayPrice } from "@/lib/visibility";
 import type { Product, ShopCartItem } from "@/types";
 
 interface CartLine extends ShopCartItem {
@@ -129,12 +129,13 @@ export default function CartView() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() =>
-                            updateCartQuantity(
-                              line.productId,
-                              line.quantity - 1,
-                            )
-                          }
+                          onClick={() => {
+                            const bu = line.product
+                              ? getBundleUnit(line.product)
+                              : 1;
+                            const next = Math.max(bu, line.quantity - bu);
+                            updateCartQuantity(line.productId, next);
+                          }}
                         >
                           −
                         </Button>
@@ -144,15 +145,23 @@ export default function CartView() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() =>
+                          onClick={() => {
+                            const bu = line.product
+                              ? getBundleUnit(line.product)
+                              : 1;
                             updateCartQuantity(
                               line.productId,
-                              line.quantity + 1,
-                            )
-                          }
+                              line.quantity + bu,
+                            );
+                          }}
                         >
                           +
                         </Button>
+                        {line.product && getBundleUnit(line.product) > 1 && (
+                          <span className="text-xs text-muted-foreground">
+                            ({getBundleUnit(line.product)}개 단위)
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div className="text-right">

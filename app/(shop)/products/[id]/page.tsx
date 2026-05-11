@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { use, useEffect, useMemo, useState } from "react";
-import { notFound } from "next/navigation";
+import { notFound, useRouter } from "next/navigation";
 import { collection, doc, getDoc, getDocs } from "firebase/firestore";
 import { Heart, ShoppingCart, Truck } from "lucide-react";
 import { toast } from "sonner";
@@ -15,7 +15,7 @@ import { ProductCard } from "@/components/shop/product-card";
 import { db } from "@/lib/firebase";
 import { addToCart } from "@/lib/cart";
 import { formatPriceKRW } from "@/lib/format";
-import { getDisplayPrice, isShoppableProduct } from "@/lib/visibility";
+import { getBundleUnit, getDisplayPrice, isShoppableProduct } from "@/lib/visibility";
 import { cn } from "@/lib/utils";
 import type { Product } from "@/types";
 
@@ -25,6 +25,7 @@ export default function ProductDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const router = useRouter();
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -54,6 +55,7 @@ export default function ProductDetailPage({
         }
         setProduct(data);
         setActiveImage(data.imageUrl);
+        setQuantity(getBundleUnit(data));
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "상품 로드 실패");
@@ -132,7 +134,24 @@ export default function ProductDetailPage({
   const hasDetail = Boolean(product.detailImageUrl || product.detailText);
   const soldOut = (product.stock ?? 0) <= 0;
   const price = getDisplayPrice(product);
+  const bundleUnit = getBundleUnit(product);
   const subTotal = price * quantity;
+
+  function decreaseQty() {
+    setQuantity((q) => Math.max(bundleUnit, q - bundleUnit));
+  }
+  function increaseQty() {
+    setQuantity((q) => q + bundleUnit);
+  }
+  function handleAddToCart() {
+    addToCart(product!.id, quantity);
+    toast.success("장바구니에 담았어요.");
+  }
+  function handleInstantBuy() {
+    if (soldOut) return;
+    addToCart(product!.id, quantity);
+    router.push("/checkout");
+  }
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
@@ -231,21 +250,20 @@ export default function ProductDetailPage({
 
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">수량</span>
+              <span className="text-sm font-medium">
+                수량
+                {bundleUnit > 1 && (
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    ({bundleUnit}개 단위로 구매)
+                  </span>
+                )}
+              </span>
               <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                >
+                <Button variant="outline" size="sm" onClick={decreaseQty}>
                   −
                 </Button>
                 <span className="min-w-10 text-center text-sm">{quantity}</span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setQuantity((q) => q + 1)}
-                >
+                <Button variant="outline" size="sm" onClick={increaseQty}>
                   +
                 </Button>
               </div>
@@ -264,14 +282,16 @@ export default function ProductDetailPage({
               size="lg"
               className="flex-1"
               disabled={soldOut}
-              onClick={() => {
-                addToCart(product.id, quantity);
-                toast.success("장바구니에 담았어요.");
-              }}
+              onClick={handleAddToCart}
             >
               <ShoppingCart className="mr-1.5 size-4" /> 장바구니
             </Button>
-            <Button size="lg" className="flex-1" disabled={soldOut}>
+            <Button
+              size="lg"
+              className="flex-1"
+              disabled={soldOut}
+              onClick={handleInstantBuy}
+            >
               바로 구매
             </Button>
             <Button

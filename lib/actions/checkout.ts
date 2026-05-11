@@ -19,6 +19,7 @@ import {
   sendVirtualAccountIssuedAlimtalk,
 } from "@/lib/alimtalk";
 import { bankNameOf } from "@/lib/banks";
+import { getBundleUnit, getDisplayPrice } from "@/lib/visibility";
 import type {
   Product,
   ShippingAddress,
@@ -135,10 +136,17 @@ export async function createPendingOrderAction(
           `${product.name} 재고 부족 (요청 ${it.quantity}, 가용 ${stock})`,
         );
       }
+      const bundleUnit = getBundleUnit(product);
+      if (it.quantity % bundleUnit !== 0) {
+        throw new Error(
+          `${product.name} 은 ${bundleUnit}개 단위로 구매해야 합니다 (요청 ${it.quantity})`,
+        );
+      }
       tx.update(productRef, {
         stock: FieldValue.increment(-it.quantity),
       });
-      const unitPrice = product.priceA ?? product.defaultPrice ?? 0;
+      // 가격은 lib/visibility 의 getDisplayPrice 사용 (3% 인상 + 1원 내림)
+      const unitPrice = getDisplayPrice(product);
       const lineTotal = unitPrice * it.quantity;
       totalAmount += lineTotal;
       orderItems.push({
