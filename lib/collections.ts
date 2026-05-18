@@ -24,6 +24,20 @@ import type { ShopCollection } from "@/types";
 
 const COLLECTION = "shop_collections";
 
+/**
+ * 홈 화면에 띄울 "추천 컬렉션" 의 고정 ID.
+ *
+ * 이 ID 의 컬렉션은 다음과 같이 특별 취급됩니다:
+ *  - 홈 (`/`) 의 추천 그리드가 이 컬렉션의 productIds 를 그대로 사용.
+ *  - "한 상품 = 한 컬렉션" 정책의 예외 — 다른 컬렉션에 이미 있는 상품도
+ *    추천 컬렉션에는 추가 가능.
+ */
+export const FEATURED_COLLECTION_ID = "featured";
+
+export function isFeaturedCollection(c: { id: string }): boolean {
+  return c.id === FEATURED_COLLECTION_ID;
+}
+
 export async function listCollections(opts?: {
   publicOnly?: boolean;
 }): Promise<ShopCollection[]> {
@@ -86,7 +100,6 @@ export interface UpdateCollectionInput {
   productIds?: string[];
   order?: number;
   isPublic?: boolean;
-  featured?: boolean;
 }
 
 export async function updateCollection(input: UpdateCollectionInput) {

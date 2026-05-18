@@ -63,10 +63,10 @@ export default function HomePage() {
 
       <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6">
         <h2 className="text-2xl font-bold tracking-tight md:text-3xl">
-          추천 컬렉션
+          이번 주 추천 상품
         </h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          관리자가 추천한 컬렉션을 한눈에.
+          매장 베스트 셀러부터 신상품까지, CUBO 가 고른 추천 라인업.
         </p>
         <div className="mt-8">
           <FeaturedCollections />

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { collection, getDocs } from "firebase/firestore";
 import { Eye, EyeOff, Plus, Star } from "lucide-react";
@@ -9,14 +10,23 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { listCollections } from "@/lib/collections";
+import { useAuth } from "@/components/auth/auth-provider";
+import {
+  FEATURED_COLLECTION_ID,
+  createCollection,
+  isFeaturedCollection,
+  listCollections,
+} from "@/lib/collections";
 import { db } from "@/lib/firebase";
 import type { Product, ShopCollection } from "@/types";
 
 export default function AdminCollectionsPage() {
+  const router = useRouter();
+  const { user } = useAuth();
   const [collections, setCollections] = useState<ShopCollection[]>([]);
   const [productMap, setProductMap] = useState<Map<string, Product>>(new Map());
   const [loading, setLoading] = useState(true);
+  const [creatingFeatured, setCreatingFeatured] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -45,6 +55,35 @@ export default function AdminCollectionsPage() {
       cancelled = true;
     };
   }, []);
+
+  const featuredCollection = useMemo(
+    () => collections.find(isFeaturedCollection) ?? null,
+    [collections],
+  );
+  const regularCollections = useMemo(
+    () => collections.filter((c) => !isFeaturedCollection(c)),
+    [collections],
+  );
+
+  async function handleCreateFeatured() {
+    if (!user) return;
+    setCreatingFeatured(true);
+    try {
+      await createCollection({
+        id: FEATURED_COLLECTION_ID,
+        name: "홈 추천",
+        description: "메인 페이지에 띄울 추천 상품",
+        order: 0,
+        isPublic: true,
+        createdBy: user.uid,
+      });
+      toast.success("추천 컬렉션이 생성되었습니다.");
+      router.push(`/admin/listings/${FEATURED_COLLECTION_ID}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "생성 실패");
+      setCreatingFeatured(false);
+    }
+  }
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
@@ -77,32 +116,84 @@ export default function AdminCollectionsPage() {
             <Skeleton key={i} className="h-44 w-full" />
           ))}
         </div>
-      ) : collections.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
-            <p className="text-base font-medium">
-              아직 만든 컬렉션이 없어요.
-            </p>
-            <p className="text-sm text-muted-foreground">
-              &quot;Event&quot;, &quot;봉제인형&quot;, &quot;가방류&quot; 같은
-              테마 페이지를 만들어보세요.
-            </p>
-            <Link href="/admin/listings/new" className="mt-2">
-              <Button>
-                <Plus className="mr-1 size-4" />첫 컬렉션 만들기
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-          {collections.map((c) => (
-            <CollectionCard
-              key={c.id}
-              collection={c}
-              productMap={productMap}
-            />
-          ))}
+        <div className="space-y-8">
+          <section>
+            <div className="mb-2 flex items-baseline gap-2">
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+                홈 추천 컬렉션
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                메인 페이지 추천 영역에 노출 · 다른 컬렉션과 중복 가능
+              </p>
+            </div>
+            {featuredCollection ? (
+              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                <CollectionCard
+                  collection={featuredCollection}
+                  productMap={productMap}
+                />
+              </div>
+            ) : (
+              <Card className="border-dashed">
+                <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
+                  <p className="text-sm font-medium">
+                    아직 추천 컬렉션이 없어요.
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    홈 화면에 띄울 상품을 큐레이션하는 전용 컬렉션을 만들어보세요.
+                  </p>
+                  <Button
+                    size="sm"
+                    onClick={handleCreateFeatured}
+                    disabled={creatingFeatured}
+                  >
+                    <Star className="mr-1 size-4" />
+                    {creatingFeatured ? "생성 중…" : "추천 컬렉션 만들기"}
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+          </section>
+
+          <section>
+            <div className="mb-2 flex items-baseline gap-2">
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+                일반 컬렉션
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                카테고리·테마 페이지 · 한 상품 = 한 컬렉션
+              </p>
+            </div>
+            {regularCollections.length === 0 ? (
+              <Card>
+                <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+                  <p className="text-sm font-medium">
+                    아직 만든 일반 컬렉션이 없어요.
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    &quot;Event&quot;, &quot;봉제인형&quot;, &quot;가방류&quot;
+                    같은 테마 페이지를 만들어보세요.
+                  </p>
+                  <Link href="/admin/listings/new" className="mt-1">
+                    <Button size="sm">
+                      <Plus className="mr-1 size-4" />첫 컬렉션 만들기
+                    </Button>
+                  </Link>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                {regularCollections.map((c) => (
+                  <CollectionCard
+                    key={c.id}
+                    collection={c}
+                    productMap={productMap}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
         </div>
       )}
     </div>
@@ -152,7 +243,7 @@ function CollectionCard({
         <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
           <CardTitle className="text-base">
             {c.name}
-            {c.featured && (
+            {isFeaturedCollection(c) && (
               <Star className="ml-1.5 inline size-3.5 fill-brand-pink text-brand-pink" />
             )}
           </CardTitle>

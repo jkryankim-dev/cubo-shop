@@ -1,53 +1,58 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { collection, getDocs } from "firebase/firestore";
-import { ArrowRight } from "lucide-react";
 
-import { Card } from "@/components/ui/card";
+import { ProductCard } from "@/components/shop/product-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { db } from "@/lib/firebase";
-import { listCollections } from "@/lib/collections";
+import { FEATURED_COLLECTION_ID, getCollection } from "@/lib/collections";
+import { getSafetyStockMap } from "@/lib/safety-stocks";
 import { isShoppableProduct } from "@/lib/visibility";
-import type { Product, ShopCollection } from "@/types";
+import type { Product } from "@/types";
 
-interface FeaturedRow {
-  collection: ShopCollection;
-  previews: Product[];
-}
-
+/** 메인 페이지의 "추천 상품" 그리드.
+ *
+ * `shop_collections/featured` 컬렉션에 등록된 상품을 productIds 순서대로 노출합니다.
+ * 해당 컬렉션이 없거나 노출 가능한 상품이 없으면 안내 메시지를 띄웁니다.
+ */
 export function FeaturedCollections() {
-  const [rows, setRows] = useState<FeaturedRow[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       try {
-        const all = await listCollections({ publicOnly: true });
-        const featured = all.filter((c) => c.featured);
-        if (featured.length === 0) {
-          setRows([]);
+        const c = await getCollection(FEATURED_COLLECTION_ID);
+        if (cancelled) return;
+        if (!c || !c.isPublic || c.productIds.length === 0) {
+          setProducts([]);
           return;
         }
-        const snap = await getDocs(collection(db, "products"));
+        const [productSnap, safetyMap] = await Promise.all([
+          getDocs(collection(db, "products")),
+          getSafetyStockMap(),
+        ]);
         if (cancelled) return;
         const map = new Map(
-          snap.docs.map((d) => [d.id, { id: d.id, ...d.data() } as Product]),
+          productSnap.docs.map(
+            (d) => [d.id, { id: d.id, ...d.data() } as Product] as const,
+          ),
         );
-        const next: FeaturedRow[] = featured.map((c) => {
-          const previews: Product[] = [];
-          for (const pid of c.productIds) {
-            const p = map.get(pid);
-            if (p && isShoppableProduct(p)) previews.push(p);
-            if (previews.length >= 4) break;
-          }
-          return { collection: c, previews };
-        });
-        setRows(next.filter((r) => r.previews.length > 0));
+        const arranged: Product[] = [];
+        for (const pid of c.productIds) {
+          const p = map.get(pid);
+          if (!p) continue;
+          const withSafety: Product = {
+            ...p,
+            safetyStock: safetyMap.get(p.id) ?? 0,
+          };
+          if (isShoppableProduct(withSafety)) arranged.push(withSafety);
+        }
+        setProducts(arranged);
       } catch (err) {
-        console.error("[featured]", err);
+        if (!cancelled) console.error("[featured]", err);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -60,67 +65,26 @@ export function FeaturedCollections() {
 
   if (loading) {
     return (
-      <div className="space-y-8">
-        {Array.from({ length: 2 }).map((_, i) => (
-          <div key={i}>
-            <Skeleton className="h-7 w-40" />
-            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {Array.from({ length: 4 }).map((_, j) => (
-                <Skeleton key={j} className="aspect-square w-full" />
-              ))}
-            </div>
-          </div>
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <Skeleton key={i} className="aspect-[3/4] w-full" />
         ))}
       </div>
     );
   }
 
-  if (rows.length === 0) {
+  if (products.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
-        관리자가 컬렉션을 추천 등록하면 이 자리에 자동으로 표시됩니다.
+        관리자가 홈 추천 컬렉션에 상품을 등록하면 이 자리에 표시됩니다.
       </p>
     );
   }
 
   return (
-    <div className="space-y-12">
-      {rows.map(({ collection: c, previews }) => (
-        <section key={c.id}>
-          <header className="mb-3 flex items-baseline justify-between">
-            <h3 className="text-xl font-bold tracking-tight">{c.name}</h3>
-            <Link
-              href={`/collections/${c.id}`}
-              className="flex items-center gap-1 text-sm text-brand-pink hover:underline"
-            >
-              더 보기 <ArrowRight className="size-3.5" />
-            </Link>
-          </header>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {previews.map((p) => (
-              <Link key={p.id} href={`/products/${p.id}`} className="group">
-                <Card className="overflow-hidden">
-                  <div className="aspect-square w-full bg-muted">
-                    {p.imageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={p.imageUrl}
-                        alt={p.name}
-                        className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                        loading="lazy"
-                      />
-                    ) : null}
-                  </div>
-                  <div className="p-3">
-                    <p className="line-clamp-1 text-xs font-medium">
-                      {p.name}
-                    </p>
-                  </div>
-                </Card>
-              </Link>
-            ))}
-          </div>
-        </section>
+    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+      {products.map((p) => (
+        <ProductCard key={p.id} product={p} />
       ))}
     </div>
   );

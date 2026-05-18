@@ -12,7 +12,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/components/auth/auth-provider";
-import { createCollection, suggestSlug } from "@/lib/collections";
+import {
+  FEATURED_COLLECTION_ID,
+  createCollection,
+  suggestSlug,
+} from "@/lib/collections";
 
 export default function NewCollectionPage() {
   const router = useRouter();
@@ -38,6 +42,12 @@ export default function NewCollectionPage() {
     if (!user) return;
     if (!id.trim() || !name.trim()) {
       toast.error("이름과 ID 는 필수입니다.");
+      return;
+    }
+    if (id.trim() === FEATURED_COLLECTION_ID) {
+      toast.error(
+        `'${FEATURED_COLLECTION_ID}' 는 홈 추천 컬렉션 전용 예약 ID 입니다. 다른 ID 를 사용해주세요.`,
+      );
       return;
     }
     setSubmitting(true);

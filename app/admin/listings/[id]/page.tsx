@@ -16,8 +16,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { db } from "@/lib/firebase";
 import {
+  FEATURED_COLLECTION_ID,
   deleteCollection,
   getCollection,
+  isFeaturedCollection,
   listCollections,
   updateCollection,
 } from "@/lib/collections";
@@ -42,7 +44,6 @@ export default function EditCollectionPage({
   const [description, setDescription] = useState("");
   const [order, setOrder] = useState(999);
   const [isPublic, setIsPublic] = useState(true);
-  const [featured, setFeatured] = useState(false);
   /** 선택된 상품 — 배열 순서 = 노출 순서 */
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [filter, setFilter] = useState("");
@@ -69,7 +70,6 @@ export default function EditCollectionPage({
         setDescription(c.description ?? "");
         setOrder(c.order ?? 999);
         setIsPublic(c.isPublic);
-        setFeatured(c.featured ?? false);
         setSelectedIds(c.productIds);
 
         const prods = productSnap.docs
@@ -77,11 +77,17 @@ export default function EditCollectionPage({
           .filter((p) => p.isDeleted !== true);
         setProducts(prods);
 
-        // 다른 컬렉션이 점유한 productId 모음 (한 상품 = 하나의 컬렉션 정책)
+        // 다른 컬렉션이 점유한 productId 모음 (한 상품 = 하나의 컬렉션 정책).
+        // 단, 추천 컬렉션 (`featured`) 은 큐레이션 슬롯이라 예외:
+        //   - 추천 컬렉션 자체를 편집할 땐 어떤 상품이든 추가 가능
+        //   - 다른 컬렉션을 편집할 땐 추천 컬렉션의 productIds 는 "taken" 아님
         const taken = new Set<string>();
-        for (const other of allCollections) {
-          if (other.id === id) continue;
-          for (const pid of other.productIds) taken.add(pid);
+        if (!isFeaturedCollection(c)) {
+          for (const other of allCollections) {
+            if (other.id === id) continue;
+            if (isFeaturedCollection(other)) continue;
+            for (const pid of other.productIds) taken.add(pid);
+          }
         }
         setTakenIds(taken);
       } catch (err) {
@@ -163,7 +169,6 @@ export default function EditCollectionPage({
         productIds: selectedIds,
         order,
         isPublic,
-        featured,
       });
       toast.success("저장되었습니다.");
     } catch (err) {
@@ -202,6 +207,7 @@ export default function EditCollectionPage({
   const selectedShoppable = selectedProducts.filter((p) =>
     isShoppableProduct(p),
   ).length;
+  const isFeatured = isFeaturedCollection(coll);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
@@ -214,25 +220,45 @@ export default function EditCollectionPage({
 
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">{coll.name}</h1>
+          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
+            {coll.name}
+            {isFeatured && (
+              <span className="rounded-md bg-brand-pink/15 px-2 py-0.5 text-xs font-semibold text-brand-pink">
+                홈 추천
+              </span>
+            )}
+          </h1>
           <p className="mt-1 text-xs font-mono text-muted-foreground">
             /collections/{coll.id}
           </p>
         </div>
         <div className="flex gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleDelete}
-            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-          >
-            <Trash2 className="mr-1 size-4" /> 컬렉션 삭제
-          </Button>
+          {!isFeatured && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleDelete}
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+            >
+              <Trash2 className="mr-1 size-4" /> 컬렉션 삭제
+            </Button>
+          )}
           <Button onClick={handleSave} disabled={saving}>
             {saving ? "저장 중…" : "저장"}
           </Button>
         </div>
       </div>
+
+      {isFeatured && (
+        <div className="mb-6 rounded-md border border-brand-pink/30 bg-brand-pink/5 p-4 text-sm">
+          <p className="font-semibold text-brand-pink">홈 화면 추천 컬렉션</p>
+          <p className="mt-1 text-foreground/80">
+            여기에 추가한 상품은 메인 페이지 추천 영역에 노출됩니다. 다른 컬렉션에
+            이미 들어있는 상품도 추가할 수 있어요 (한 상품 = 한 컬렉션 규칙의 예외).
+            노출 순서는 아래에서 ↑/↓ 버튼으로 조정합니다.
+          </p>
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
         <div className="space-y-4">
@@ -273,14 +299,6 @@ export default function EditCollectionPage({
                 />
                 공개 (외부 노출)
               </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={featured}
-                  onChange={(e) => setFeatured(e.target.checked)}
-                />
-                메인 추천
-              </label>
             </CardContent>
           </Card>
 
@@ -293,8 +311,9 @@ export default function EditCollectionPage({
                 <strong>{selectedShoppable}</strong>개
               </p>
               <p className="mt-1 text-[11px] text-muted-foreground">
-                한 상품은 하나의 컬렉션에만 속할 수 있어요. 다른 컬렉션에 등록된
-                상품은 아래 목록에 나타나지 않습니다.
+                {isFeatured
+                  ? "이 컬렉션은 홈 화면 큐레이션 슬롯이에요. 다른 컬렉션의 상품도 자유롭게 추가할 수 있습니다."
+                  : "한 상품은 하나의 컬렉션에만 속할 수 있어요. 다른 컬렉션에 등록된 상품은 아래 목록에 나타나지 않습니다. (홈 추천 컬렉션은 예외)"}
               </p>
             </CardContent>
           </Card>

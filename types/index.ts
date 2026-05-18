@@ -276,8 +276,6 @@ export interface ShopCollection {
   order: number;
   /** 외부 노출 여부 */
   isPublic: boolean;
-  /** 메인에 강조 노출할지 */
-  featured?: boolean;
   createdBy?: string;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
