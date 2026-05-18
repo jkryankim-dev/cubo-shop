@@ -19,7 +19,8 @@ export interface ShoppableOptions {
  *   - isDeleted 가 true 가 아님
  *   - hidden 이 true 가 아님
  *   - tags 에 'ON' 포함
- *   - (옵션) requireStock=true 인 경우 stock > 0
+ *   - (옵션) requireStock=true 인 경우 effectiveStock > 0
+ *     · effectiveStock = stock - safetyStock (안전재고 차감)
  */
 export function isShoppableProduct(
   p: Product,
@@ -28,8 +29,18 @@ export function isShoppableProduct(
   if (p.isDeleted === true) return false;
   if (p.hidden === true) return false;
   if (!p.tags?.includes("ON")) return false;
-  if (opts.requireStock && (p.stock ?? 0) <= 0) return false;
+  if (opts.requireStock && effectiveStockOf(p) <= 0) return false;
   return true;
+}
+
+/** 실재고 - 안전재고. 안전재고 미설정 시 실재고 그대로. 음수면 0. */
+export function effectiveStockOf(p: Product): number {
+  return Math.max(0, (p.stock ?? 0) - (p.safetyStock ?? 0));
+}
+
+/** 쇼핑몰 표시·결제 기준 품절 여부. 실재고가 안전재고 이하면 품절. */
+export function isSoldOut(p: Product): boolean {
+  return effectiveStockOf(p) <= 0;
 }
 
 /**

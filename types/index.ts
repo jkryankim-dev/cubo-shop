@@ -51,6 +51,27 @@ export interface Product {
   isDeleted?: boolean;
   /** ERP 표기 — number (ms epoch). Timestamp 가 아님에 주의. */
   createdAt: number;
+  /**
+   * 안전재고 (cubo-shop 측 정책, ERP 와 무관).
+   * 코드에서 `shop_safety_stocks` 컬렉션의 값을 join 해서 채우는 임시 필드.
+   * Firestore products 에는 저장되지 않음.
+   */
+  safetyStock?: number;
+}
+
+// ---------------------------------------------------------------------
+// ShopSafetyStock — 안전재고 (cubo-shop 운영 정책)
+// 컬렉션: shop_safety_stocks/{productId}
+//
+// 노출 정책: 실재고 stock <= safetyStock 이면 자동 품절 처리
+//   (재고는 있으되 운영자가 정한 최소 보유선 밑이라 판매 X)
+// ---------------------------------------------------------------------
+export interface ShopSafetyStock {
+  productId: string;
+  /** 안전재고 임계값 — 실재고가 이 값 이하면 품절 */
+  threshold: number;
+  updatedAt?: Timestamp;
+  updatedBy?: string;
 }
 
 // ---------------------------------------------------------------------

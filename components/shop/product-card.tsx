@@ -2,12 +2,12 @@ import Link from "next/link";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { formatPriceKRW } from "@/lib/format";
-import { getBundleUnit, getDisplayPrice } from "@/lib/visibility";
+import { getBundleUnit, getDisplayPrice, isSoldOut } from "@/lib/visibility";
 import type { Product } from "@/types";
 
 export function ProductCard({ product }: { product: Product }) {
   const image = product.imageUrl;
-  const soldOut = (product.stock ?? 0) <= 0;
+  const soldOut = isSoldOut(product);
   const bundleUnit = getBundleUnit(product);
 
   return (

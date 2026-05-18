@@ -82,6 +82,14 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // -------- shop_safety_stocks/{productId} --------
+    // 안전재고 (cubo-shop 측 노출 정책). 누구나 읽기 (상품 노출 판정에 사용),
+    // 쓰기는 관리자만.
+    match /shop_safety_stocks/{productId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     // 그 외 cubo-shop 이 직접 다루지 않는 컬렉션은 ERP 룰에 의해 결정됨.
     // 이 파일에서 별도 default 매처를 두지 않음 (ERP 룰과 병합 시 충돌 방지).
   }

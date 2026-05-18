@@ -130,10 +130,18 @@ export async function createPendingOrderAction(
       if (!product.tags?.includes("ON")) {
         throw new Error(`현재 판매하지 않는 상품: ${product.name ?? it.productId}`);
       }
+      // 안전재고 fetch 후 effective stock 검증
+      const safetySnap = await tx.get(
+        adminDb().collection("shop_safety_stocks").doc(it.productId),
+      );
+      const safetyStock = safetySnap.exists
+        ? ((safetySnap.data()?.threshold as number | undefined) ?? 0)
+        : 0;
       const stock = product.stock ?? 0;
-      if (stock < it.quantity) {
+      const effectiveStock = Math.max(0, stock - safetyStock);
+      if (effectiveStock < it.quantity) {
         throw new Error(
-          `${product.name} 재고 부족 (요청 ${it.quantity}, 가용 ${stock})`,
+          `${product.name} 재고 부족 (가용 ${effectiveStock}, 안전재고 ${safetyStock} 차감)`,
         );
       }
       const bundleUnit = getBundleUnit(product);

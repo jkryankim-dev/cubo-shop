@@ -15,7 +15,13 @@ import { ProductCard } from "@/components/shop/product-card";
 import { db } from "@/lib/firebase";
 import { addToCart } from "@/lib/cart";
 import { formatPriceKRW } from "@/lib/format";
-import { getBundleUnit, getDisplayPrice, isShoppableProduct } from "@/lib/visibility";
+import { getSafetyStockOf } from "@/lib/safety-stocks";
+import {
+  getBundleUnit,
+  getDisplayPrice,
+  isShoppableProduct,
+  isSoldOut,
+} from "@/lib/visibility";
 import { cn } from "@/lib/utils";
 import type { Product } from "@/types";
 
@@ -42,13 +48,20 @@ export default function ProductDetailPage({
         return;
       }
       try {
-        const snap = await getDoc(doc(db, "products", id));
+        const [snap, safetyStock] = await Promise.all([
+          getDoc(doc(db, "products", id)),
+          getSafetyStockOf(id),
+        ]);
         if (cancelled) return;
         if (!snap.exists()) {
           notFound();
           return;
         }
-        const data = { id: snap.id, ...snap.data() } as Product;
+        const data = {
+          id: snap.id,
+          ...snap.data(),
+          safetyStock,
+        } as Product;
         if (!isShoppableProduct(data)) {
           notFound();
           return;
@@ -132,7 +145,7 @@ export default function ProductDetailPage({
   }
 
   const hasDetail = Boolean(product.detailImageUrl || product.detailText);
-  const soldOut = (product.stock ?? 0) <= 0;
+  const soldOut = isSoldOut(product);
   const price = getDisplayPrice(product);
   const bundleUnit = getBundleUnit(product);
   const subTotal = price * quantity;

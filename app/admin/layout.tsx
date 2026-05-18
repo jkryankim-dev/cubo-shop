@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  AlertTriangle,
   Bell,
   Boxes,
   CreditCard,
@@ -42,6 +43,11 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     items: [
       { href: "/admin/listings", label: "상품 노출 관리", icon: Boxes },
       { href: "/admin/products-status", label: "ON 태그 현황", icon: Tag },
+      {
+        href: "/admin/safety-stocks",
+        label: "안전재고 관리",
+        icon: AlertTriangle,
+      },
     ],
   },
   {
