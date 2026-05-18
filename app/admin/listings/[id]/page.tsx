@@ -4,7 +4,7 @@ import Link from "next/link";
 import { use, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { collection, getDocs } from "firebase/firestore";
-import { ArrowLeft, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUp, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import { db } from "@/lib/firebase";
 import {
   deleteCollection,
   getCollection,
+  listCollections,
   updateCollection,
 } from "@/lib/collections";
 import { formatPriceKRW } from "@/lib/format";
@@ -34,26 +35,28 @@ export default function EditCollectionPage({
   const router = useRouter();
   const [coll, setColl] = useState<ShopCollection | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
+  /** 이 컬렉션 외 다른 컬렉션이 이미 점유한 productId 모음 */
+  const [takenIds, setTakenIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [order, setOrder] = useState(999);
   const [isPublic, setIsPublic] = useState(true);
   const [featured, setFeatured] = useState(false);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  /** 선택된 상품 — 배열 순서 = 노출 순서 */
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [filter, setFilter] = useState("");
-  const [showOnly, setShowOnly] = useState<"all" | "selected" | "available">(
-    "all",
-  );
+  const [showOnly, setShowOnly] = useState<"available" | "all">("available");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       try {
-        const [c, productSnap] = await Promise.all([
+        const [c, productSnap, allCollections] = await Promise.all([
           getCollection(id),
           getDocs(collection(db, "products")),
+          listCollections(),
         ]);
         if (cancelled) return;
         if (!c) {
@@ -67,11 +70,20 @@ export default function EditCollectionPage({
         setOrder(c.order ?? 999);
         setIsPublic(c.isPublic);
         setFeatured(c.featured ?? false);
-        setSelected(new Set(c.productIds));
+        setSelectedIds(c.productIds);
+
         const prods = productSnap.docs
           .map((d) => ({ id: d.id, ...d.data() }) as Product)
           .filter((p) => p.isDeleted !== true);
         setProducts(prods);
+
+        // 다른 컬렉션이 점유한 productId 모음 (한 상품 = 하나의 컬렉션 정책)
+        const taken = new Set<string>();
+        for (const other of allCollections) {
+          if (other.id === id) continue;
+          for (const pid of other.productIds) taken.add(pid);
+        }
+        setTakenIds(taken);
       } catch (err) {
         if (!cancelled)
           toast.error(err instanceof Error ? err.message : "로드 실패");
@@ -85,12 +97,25 @@ export default function EditCollectionPage({
     };
   }, [id, router]);
 
-  const filtered = useMemo(() => {
-    let arr = products;
-    if (showOnly === "selected") arr = arr.filter((p) => selected.has(p.id));
-    else if (showOnly === "available")
-      arr = arr.filter((p) => isShoppableProduct(p));
+  const productMap = useMemo(() => {
+    const m = new Map<string, Product>();
+    for (const p of products) m.set(p.id, p);
+    return m;
+  }, [products]);
 
+  /** 선택된 상품 순서대로 (productMap 매칭 가능한 것만) */
+  const selectedProducts = useMemo(() => {
+    return selectedIds
+      .map((pid) => productMap.get(pid))
+      .filter((p): p is Product => Boolean(p));
+  }, [selectedIds, productMap]);
+
+  /** 추가 가능한 상품: 다른 컬렉션에 안 속하고, 본 컬렉션에도 아직 안 선택된 것 */
+  const addableProducts = useMemo(() => {
+    let arr = products.filter(
+      (p) => !takenIds.has(p.id) && !selectedIds.includes(p.id),
+    );
+    if (showOnly === "available") arr = arr.filter((p) => isShoppableProduct(p));
     if (filter) {
       const q = filter.toLowerCase();
       arr = arr.filter(
@@ -101,13 +126,29 @@ export default function EditCollectionPage({
       );
     }
     return arr;
-  }, [products, selected, filter, showOnly]);
+  }, [products, takenIds, selectedIds, filter, showOnly]);
 
-  function toggle(productId: string) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(productId)) next.delete(productId);
-      else next.add(productId);
+  function addProduct(productId: string) {
+    setSelectedIds((prev) =>
+      prev.includes(productId) ? prev : [...prev, productId],
+    );
+  }
+  function removeProduct(productId: string) {
+    setSelectedIds((prev) => prev.filter((pid) => pid !== productId));
+  }
+  function moveUp(index: number) {
+    if (index <= 0) return;
+    setSelectedIds((prev) => {
+      const next = [...prev];
+      [next[index - 1], next[index]] = [next[index], next[index - 1]];
+      return next;
+    });
+  }
+  function moveDown(index: number) {
+    setSelectedIds((prev) => {
+      if (index >= prev.length - 1) return prev;
+      const next = [...prev];
+      [next[index], next[index + 1]] = [next[index + 1], next[index]];
       return next;
     });
   }
@@ -119,7 +160,7 @@ export default function EditCollectionPage({
         id,
         name: name.trim(),
         description: description.trim(),
-        productIds: Array.from(selected),
+        productIds: selectedIds,
         order,
         isPublic,
         featured,
@@ -158,10 +199,9 @@ export default function EditCollectionPage({
     );
   }
 
-  const selectedShoppable = Array.from(selected).filter((pid) => {
-    const p = products.find((x) => x.id === pid);
-    return p ? isShoppableProduct(p) : false;
-  }).length;
+  const selectedShoppable = selectedProducts.filter((p) =>
+    isShoppableProduct(p),
+  ).length;
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
@@ -247,64 +287,44 @@ export default function EditCollectionPage({
           <Card>
             <CardContent className="space-y-1 p-5 text-sm">
               <p className="text-xs text-muted-foreground">선택된 상품</p>
-              <p className="text-2xl font-bold">{selected.size}</p>
+              <p className="text-2xl font-bold">{selectedIds.length}</p>
               <p className="text-xs text-muted-foreground">
                 실제 노출 가능 (ON 태그 보유):{" "}
                 <strong>{selectedShoppable}</strong>개
+              </p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                한 상품은 하나의 컬렉션에만 속할 수 있어요. 다른 컬렉션에 등록된
+                상품은 아래 목록에 나타나지 않습니다.
               </p>
             </CardContent>
           </Card>
         </div>
 
-        <Card>
-          <CardHeader className="space-y-3">
-            <CardTitle className="text-base">상품 선택</CardTitle>
-            <div className="flex flex-wrap items-center gap-2">
-              <select
-                value={showOnly}
-                onChange={(e) =>
-                  setShowOnly(
-                    e.target.value as "all" | "selected" | "available",
-                  )
-                }
-                className="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
-              >
-                <option value="all">전체</option>
-                <option value="available">노출 가능 (ON) 만</option>
-                <option value="selected">선택된 것만</option>
-              </select>
-              <Input
-                type="search"
-                placeholder="상품명/ID 검색"
-                value={filter}
-                onChange={(e) => setFilter(e.target.value)}
-                className="ml-auto max-w-xs"
-              />
-            </div>
-          </CardHeader>
-          <CardContent className="p-0">
-            {filtered.length === 0 ? (
-              <p className="py-12 text-center text-sm text-muted-foreground">
-                일치하는 상품이 없습니다.
-              </p>
-            ) : (
-              <ul className="max-h-[600px] divide-y overflow-y-auto">
-                {filtered.map((p) => {
-                  const checked = selected.has(p.id);
-                  const shoppable = isShoppableProduct(p);
-                  return (
-                    <li key={p.id}>
-                      <label
-                        className={cn(
-                          "flex cursor-pointer items-center gap-3 px-4 py-2 transition-colors",
-                          checked ? "bg-brand-pink/5" : "hover:bg-muted/40",
-                        )}
+        <div className="space-y-6">
+          {/* 선택된 상품 — 순서 조정 */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">
+                선택된 상품 (노출 순서)
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {selectedProducts.length === 0 ? (
+                <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+                  아직 선택된 상품이 없어요. 아래에서 추가해주세요.
+                </p>
+              ) : (
+                <ul className="divide-y">
+                  {selectedProducts.map((p, idx) => {
+                    const shoppable = isShoppableProduct(p);
+                    return (
+                      <li
+                        key={p.id}
+                        className="flex items-center gap-3 px-4 py-2"
                       >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => toggle(p.id)}
-                        />
+                        <span className="w-8 shrink-0 text-center text-xs text-muted-foreground">
+                          {idx + 1}
+                        </span>
                         <div className="size-12 shrink-0 overflow-hidden rounded bg-muted">
                           {p.imageUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
@@ -315,12 +335,13 @@ export default function EditCollectionPage({
                             />
                           ) : null}
                         </div>
-                        <div className="flex-1 min-w-0">
+                        <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-medium">
                             {p.name}
                           </p>
                           <p className="truncate text-xs text-muted-foreground">
-                            {p.category ?? "—"} · {formatPriceKRW(getDisplayPrice(p))}
+                            {p.category ?? "—"} ·{" "}
+                            {formatPriceKRW(getDisplayPrice(p))}
                           </p>
                         </div>
                         {!shoppable && (
@@ -328,14 +349,122 @@ export default function EditCollectionPage({
                             ON 없음
                           </span>
                         )}
-                      </label>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
+                        <div className="flex gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-7"
+                            disabled={idx === 0}
+                            onClick={() => moveUp(idx)}
+                            aria-label="위로"
+                          >
+                            <ArrowUp className="size-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-7"
+                            disabled={idx === selectedProducts.length - 1}
+                            onClick={() => moveDown(idx)}
+                            aria-label="아래로"
+                          >
+                            <ArrowDown className="size-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-7 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            onClick={() => removeProduct(p.id)}
+                            aria-label="제거"
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* 추가할 상품 */}
+          <Card>
+            <CardHeader className="space-y-3">
+              <CardTitle className="text-base">추가할 상품</CardTitle>
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={showOnly}
+                  onChange={(e) =>
+                    setShowOnly(e.target.value as "available" | "all")
+                  }
+                  className="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
+                >
+                  <option value="available">노출 가능 (ON) 만</option>
+                  <option value="all">ON 무관 전체</option>
+                </select>
+                <Input
+                  type="search"
+                  placeholder="상품명/ID 검색"
+                  value={filter}
+                  onChange={(e) => setFilter(e.target.value)}
+                  className="ml-auto max-w-xs"
+                />
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {addableProducts.length === 0 ? (
+                <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+                  추가할 수 있는 상품이 없어요. (다른 컬렉션에 이미 등록된 상품은
+                  보이지 않습니다)
+                </p>
+              ) : (
+                <ul className="max-h-[500px] divide-y overflow-y-auto">
+                  {addableProducts.map((p) => {
+                    const shoppable = isShoppableProduct(p);
+                    return (
+                      <li key={p.id}>
+                        <button
+                          type="button"
+                          onClick={() => addProduct(p.id)}
+                          className={cn(
+                            "flex w-full items-center gap-3 px-4 py-2 text-left transition-colors hover:bg-muted/40",
+                          )}
+                        >
+                          <div className="size-12 shrink-0 overflow-hidden rounded bg-muted">
+                            {p.imageUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={p.imageUrl}
+                                alt={p.name}
+                                className="h-full w-full object-cover"
+                              />
+                            ) : null}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium">
+                              {p.name}
+                            </p>
+                            <p className="truncate text-xs text-muted-foreground">
+                              {p.category ?? "—"} ·{" "}
+                              {formatPriceKRW(getDisplayPrice(p))}
+                            </p>
+                          </div>
+                          {!shoppable && (
+                            <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                              ON 없음
+                            </span>
+                          )}
+                          <span className="text-xs text-brand-pink">+ 추가</span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );
