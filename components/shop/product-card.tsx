@@ -9,7 +9,7 @@ import { getBundleUnit, getDisplayPrice, isSoldOut } from "@/lib/visibility";
 import type { Product } from "@/types";
 
 export function ProductCard({ product }: { product: Product }) {
-  const { approvedBusiness, loading } = useAuth();
+  const { canViewPrice, loading } = useAuth();
   const image = product.imageUrl;
   const soldOut = isSoldOut(product);
   const bundleUnit = getBundleUnit(product);
@@ -43,9 +43,11 @@ export function ProductCard({ product }: { product: Product }) {
           <p className="line-clamp-2 text-sm font-medium text-foreground/90">
             {product.name}
           </p>
-          {/* 사업자 도매가는 사업자등록증 승인 회원에게만 노출.
-              비로그인·일반 회원·승인 대기 회원·로딩 중에는 아예 렌더 안 함. */}
-          {!loading && approvedBusiness && (
+          {/* 사업자 도매가는 가격 노출 권한자에게만:
+              - 사업자등록증 승인 회원 / ERP 비가맹 마이그레이션 회원
+              - ?ref=<code> 영업링크로 들어온 익명 방문자
+              그 외에는 가격 라인 자체를 안 그림. */}
+          {!loading && canViewPrice && (
             <p className="text-base font-bold text-brand-pink">
               {formatPriceKRW(getDisplayPrice(product))}
               {bundleUnit > 1 && (

@@ -11,6 +11,7 @@ import { onAuthStateChanged, type User } from "firebase/auth";
 
 import { auth } from "@/lib/firebase";
 import { getCustomerProfile, isShopAdmin } from "@/lib/auth";
+import { hasSalesRefCookie } from "@/lib/sales-ref";
 import type { ShopCustomer } from "@/types";
 
 interface AuthContextValue {
@@ -24,9 +25,19 @@ interface AuthContextValue {
   loading: boolean;
   /**
    * 사업자 회원 + 사업자등록증 승인 완료 상태.
-   * true 인 회원만 가격을 볼 수 있고 결제 가능 (관리자는 별도).
+   * true 인 회원만 **결제 가능** (관리자는 별도).
+   *
+   * 판정 조건 (둘 중 하나):
+   *   1) cubo-shop 자체 가입: grade='business' + businessLicense.status='approved'
+   *   2) ERP 비가맹 마이그레이션: erpEntityId 존재 (ERP 가 이미 승인한 회원)
    */
   approvedBusiness: boolean;
+  /**
+   * **가격 노출** 권한.
+   * - approvedBusiness 인 로그인 회원
+   * - 또는 ?ref=<code> 영업링크로 들어온 익명 방문자 (쿠키 보유)
+   */
+  canViewPrice: boolean;
   /** 프로필을 다시 읽어옴 (사업자등록증 업로드 후 등) */
   refreshProfile: () => Promise<void>;
 }
@@ -75,7 +86,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const approvedBusiness =
     profile?.grade === "business" &&
-    profile?.businessLicense?.status === "approved";
+    (profile?.businessLicense?.status === "approved" ||
+      !!profile?.erpEntityId);
+
+  // ?ref 쿠키 보유 익명 방문자도 가격 노출. SSR 안전을 위해 클라이언트 마운트 후에 평가.
+  const [hasRef, setHasRef] = useState(false);
+  useEffect(() => {
+    setHasRef(hasSalesRefCookie());
+  }, [user]); // user 변경 시 재평가 (anon → 회원 등)
+
+  const canViewPrice = approvedBusiness || (!!user && hasRef);
 
   return (
     <AuthContext.Provider
@@ -85,6 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         admin,
         loading,
         approvedBusiness,
+        canViewPrice,
         refreshProfile,
       }}
     >

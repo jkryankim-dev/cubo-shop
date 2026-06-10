@@ -4,12 +4,15 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { FirebaseError } from "firebase/app";
+import { signInWithCustomToken } from "firebase/auth";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { auth } from "@/lib/firebase";
 import { signIn } from "@/lib/auth";
+import { erpLoginAction } from "@/lib/actions/erp-login";
 
 export default function LoginPageInner() {
   return (
@@ -43,25 +46,45 @@ function LoginForm() {
     e.preventDefault();
     setError(null);
     setSubmitting(true);
+    const id = loginId.trim();
     try {
-      await signIn(loginId.trim(), password);
+      // 1) cubo-shop 자체 가입 회원 (fake email 기반) 우선 시도
+      await signIn(id, password);
       router.push(redirectTo);
+      return;
     } catch (err: unknown) {
-      if (err instanceof FirebaseError) {
-        if (
-          err.code === "auth/invalid-credential" ||
-          err.code === "auth/user-not-found" ||
-          err.code === "auth/wrong-password"
-        ) {
-          setError("아이디 또는 비밀번호가 올바르지 않습니다.");
-        } else {
+      const notFoundCodes = new Set([
+        "auth/invalid-credential",
+        "auth/user-not-found",
+        "auth/wrong-password",
+      ]);
+      const isNotFound =
+        err instanceof FirebaseError && notFoundCodes.has(err.code);
+      if (!isNotFound) {
+        if (err instanceof FirebaseError) {
           setError(`로그인 실패: ${err.message}`);
+        } else {
+          setError("로그인 중 오류가 발생했습니다.");
         }
-      } else {
-        setError("로그인 중 오류가 발생했습니다.");
+        setSubmitting(false);
+        return;
       }
-    } finally {
-      setSubmitting(false);
+      // 2) cubo-shop 에 없는 ID → ERP 비가맹 회원 fallback
+      try {
+        const result = await erpLoginAction({ loginId: id, password });
+        if (!result.success || !result.customToken) {
+          setError(result.message);
+          setSubmitting(false);
+          return;
+        }
+        await signInWithCustomToken(auth, result.customToken);
+        router.push(redirectTo);
+      } catch (e2) {
+        setError(
+          e2 instanceof Error ? e2.message : "ERP 로그인 처리 중 오류가 발생했습니다.",
+        );
+        setSubmitting(false);
+      }
     }
   }
 

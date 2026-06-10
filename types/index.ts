@@ -99,10 +99,13 @@ export type CustomerGrade =
 
 export interface ShopCustomer {
   uid: string;
-  /** 로그인용 ID (영문/숫자, 4-12자) */
+  /** 로그인용 ID (영문/숫자, 4-12자). ERP 비가맹 마이그레이션 회원은 ERP users 문서ID */
   loginId: string;
-  /** 가짜 이메일 (Firebase Auth 식별자, `${loginId}@cubo.shop.local`) */
-  authEmail: string;
+  /**
+   * 가짜 이메일 (Firebase Auth 식별자, `${loginId}@cubo.shop.local`).
+   * ERP 비가맹 마이그레이션 회원은 비어있을 수 있음 (커스텀 토큰 흐름).
+   */
+  authEmail?: string;
   /** 사용자가 입력한 실제 이메일 */
   email: string;
   name: string;
@@ -116,8 +119,32 @@ export interface ShopCustomer {
   taxInvoiceInfo?: TaxInvoiceInfo;
   grade: CustomerGrade;
   marketingOptIn?: boolean;
+  /**
+   * 영업링크 (`?ref=<code>`) 로 들어와 가입한 경우 그 코드.
+   * ERP `shop_sales_links/{code}` 와 연결되어 영업자/배포자 추적용.
+   */
+  salesRef?: string;
+  /**
+   * ERP `entities/{id}` 와 연결된 거래처 ID.
+   * ERP 비가맹 회원 마이그레이션 시 반드시 기록 (중복 거래처 생성 방지).
+   */
+  erpEntityId?: string;
+  /** 첫 로그인 동의 정보 (cubo-shop 약관/개인정보/마케팅/카카오톡) */
+  consents?: ShopCustomerConsents;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
+}
+
+export interface ShopCustomerConsents {
+  /** 이용약관 (필수) */
+  terms: boolean;
+  /** 개인정보 처리방침 (필수) */
+  privacy: boolean;
+  /** 마케팅/신상품 수신 (선택) */
+  marketing: boolean;
+  /** 카카오톡 알림톡 수신 (선택) */
+  kakao: boolean;
+  agreedAt?: Timestamp;
 }
 
 export interface BusinessLicense {
@@ -319,4 +346,23 @@ export interface SitePaymentSettings {
   noticeText?: string;
   updatedAt?: Timestamp;
   updatedBy?: string;
+}
+
+// ---------------------------------------------------------------------
+// ShopSalesLink — 영업/배포 추적 링크
+// 컬렉션: shop_sales_links/{code}
+//
+// ERP 에서 발급. cubo-shop 은 ?ref=<code> 진입 시 visits/signups 만 증가.
+// 가입 완료 시 shop_customers/{uid}.salesRef 에 code 박음.
+// ---------------------------------------------------------------------
+export interface ShopSalesLink {
+  /** 문서 ID = 링크 코드 */
+  salesPerson?: string;
+  distributor?: string;
+  createdBy?: string;
+  createdByName?: string;
+  createdAt?: Timestamp;
+  active?: boolean;
+  visits?: number;
+  signups?: number;
 }

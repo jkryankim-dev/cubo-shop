@@ -98,6 +98,15 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // -------- shop_sales_links/{code} --------
+    // 영업/배포 추적 링크 (ERP 가 발급, cubo-shop 은 visits/signups 만 증가).
+    // 클라이언트 read/write 모두 차단 — Admin SDK Server Action 으로만 접근.
+    // (ERP 자체 admin 화면은 ERP 측 권한으로 별도 관리)
+    match /shop_sales_links/{code} {
+      allow read: if false;
+      allow write: if false;
+    }
+
     // 그 외 cubo-shop 이 직접 다루지 않는 컬렉션은 ERP 룰에 의해 결정됨.
     // 이 파일에서 별도 default 매처를 두지 않음 (ERP 룰과 병합 시 충돌 방지).
   }

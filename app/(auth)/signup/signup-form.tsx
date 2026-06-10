@@ -18,6 +18,8 @@ import {
   updateTaxInvoiceInfo,
   uploadBusinessLicense,
 } from "@/lib/auth";
+import { recordSalesLinkSignupAction } from "@/lib/actions/sales-links";
+import { clearSalesRef, getSalesRef } from "@/lib/sales-ref";
 import { formatPhone } from "@/lib/format";
 import {
   EMPTY_TAX_INVOICE,
@@ -128,6 +130,19 @@ export default function SignupForm() {
           toast.error(
             "세금계산서 정보 저장에 실패했어요. 마이페이지에서 다시 입력해주세요.",
           );
+        }
+      }
+
+      // 영업링크 (?ref) 로 들어와 가입한 경우 — signups++ + customer.salesRef 셋
+      const ref = getSalesRef();
+      if (ref) {
+        try {
+          const idToken = await cred.user.getIdToken();
+          await recordSalesLinkSignupAction({ idToken, code: ref });
+          clearSalesRef();
+        } catch (err) {
+          // 영업 귀속 실패해도 가입 자체는 성공한 거니까 조용히 warn
+          console.warn("[signup] 영업링크 귀속 실패", err);
         }
       }
 

@@ -157,6 +157,26 @@ export async function updateTaxInvoiceInfo(
   });
 }
 
+/** 첫 로그인 동의 정보 저장 — shop_customers.consents 에 박음. */
+export async function saveCustomerConsents(
+  uid: string,
+  input: {
+    terms: boolean;
+    privacy: boolean;
+    marketing: boolean;
+    kakao: boolean;
+  },
+) {
+  await updateDoc(doc(db, "shop_customers", uid), {
+    consents: {
+      ...input,
+      agreedAt: serverTimestamp(),
+    },
+    marketingOptIn: input.marketing,
+    updatedAt: serverTimestamp(),
+  });
+}
+
 // ---------------------------------------------------------------------
 // 관리자 여부 확인 (Firestore `shop_admins/{uid}` 존재 여부)
 // ---------------------------------------------------------------------

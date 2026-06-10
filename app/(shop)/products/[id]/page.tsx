@@ -33,7 +33,13 @@ export default function ProductDetailPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
-  const { user, profile, approvedBusiness, loading: authLoading } = useAuth();
+  const {
+    user,
+    profile,
+    approvedBusiness,
+    canViewPrice,
+    loading: authLoading,
+  } = useAuth();
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -233,7 +239,7 @@ export default function ProductDetailPage({
             )}
           </div>
 
-          {!authLoading && approvedBusiness && (
+          {!authLoading && canViewPrice && (
             <div className="flex items-baseline gap-2">
               <span className="text-3xl font-extrabold text-brand-pink">
                 {formatPriceKRW(price)}
@@ -266,23 +272,23 @@ export default function ProductDetailPage({
           <Separator />
 
           {!authLoading && !approvedBusiness ? (
-            // 비로그인 + 일반/미승인 사업자 회원 모두 동일 처리:
-            // 가격·수량·구매 UI 전부 숨기고 사업자 승인 안내 박스
+            // 비로그인 + 익명(?ref) + 일반/미승인 사업자 회원 모두 동일 처리:
+            // 결제 UI 차단 + 사업자 회원가입/승인 안내
             <div className="rounded-md border border-dashed border-brand-pink/40 bg-brand-pink/5 p-4 text-center">
               <p className="text-sm font-semibold">
-                사업자 승인 회원 전용 도매가
+                구매는 사업자 승인 회원만 가능합니다
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
-                {!user
-                  ? "가격 확인·구매는 사업자 회원 로그인 후 가능합니다."
+                {!user || user.isAnonymous
+                  ? "사업자 회원 가입·로그인 후 구매 진행이 가능합니다."
                   : profile?.businessLicense?.status === "pending"
-                    ? "사업자등록증 검토 중입니다. 승인되면 가격이 표시됩니다."
+                    ? "사업자등록증 검토 중입니다. 승인되면 결제가 활성화됩니다."
                     : profile?.businessLicense?.status === "rejected"
                       ? "사업자등록증이 반려되었습니다. 마이페이지에서 다시 업로드해주세요."
-                      : "사업자등록증을 등록하시면 검토 후 가격이 표시됩니다."}
+                      : "사업자등록증을 등록하시면 검토 후 결제가 활성화됩니다."}
               </p>
               <div className="mt-3 flex justify-center gap-2">
-                {!user ? (
+                {!user || user.isAnonymous ? (
                   <>
                     <Link href="/login">
                       <Button size="sm" variant="outline">
@@ -430,7 +436,7 @@ export default function ProductDetailPage({
               {product.barcode && (
                 <InfoRow label="바코드" value={product.barcode} />
               )}
-              {!authLoading && approvedBusiness && (
+              {!authLoading && canViewPrice && (
                 <InfoRow
                   label="판매가"
                   value={formatPriceKRW(price)}

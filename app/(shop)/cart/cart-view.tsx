@@ -25,10 +25,13 @@ interface CartLine extends ShopCartItem {
 }
 
 export default function CartView() {
-  const { user, approvedBusiness, loading: authLoading } = useAuth();
+  const { user, approvedBusiness, canViewPrice, loading: authLoading } =
+    useAuth();
   const [lines, setLines] = useState<CartLine[]>([]);
   const [loading, setLoading] = useState(true);
-  const showPrices = !authLoading && approvedBusiness;
+  // 가격 노출은 canViewPrice (?ref 익명 + 승인 회원). 결제 버튼은 approvedBusiness 만.
+  const showPrices = !authLoading && canViewPrice;
+  const canOrder = !authLoading && approvedBusiness;
 
   const refresh = useCallback(async () => {
     const items = getCartItems();
@@ -215,11 +218,22 @@ export default function CartView() {
                       {formatPriceKRW(total)}
                     </span>
                   </div>
-                  <Link href="/checkout" className="block">
-                    <Button className="w-full" size="lg">
-                      결제하기
-                    </Button>
-                  </Link>
+                  {canOrder ? (
+                    <Link href="/checkout" className="block">
+                      <Button className="w-full" size="lg">
+                        결제하기
+                      </Button>
+                    </Link>
+                  ) : (
+                    <div className="rounded-md border border-dashed border-brand-pink/40 bg-brand-pink/5 p-3 text-center text-xs">
+                      결제는 사업자 승인 회원만 가능합니다.
+                      <div className="mt-2 flex justify-center gap-2">
+                        <Link href="/signup">
+                          <Button size="sm">사업자 회원가입</Button>
+                        </Link>
+                      </div>
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="rounded-md border border-dashed border-brand-pink/40 bg-brand-pink/5 p-3 text-center text-xs">
