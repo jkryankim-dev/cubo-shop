@@ -136,7 +136,7 @@ export default function EditCollectionPage({
 
   function addProduct(productId: string) {
     setSelectedIds((prev) =>
-      prev.includes(productId) ? prev : [...prev, productId],
+      prev.includes(productId) ? prev : [productId, ...prev],
     );
   }
   function removeProduct(productId: string) {
@@ -155,6 +155,18 @@ export default function EditCollectionPage({
       if (index >= prev.length - 1) return prev;
       const next = [...prev];
       [next[index], next[index + 1]] = [next[index + 1], next[index]];
+      return next;
+    });
+  }
+  /** 1-based 순번을 입력하면 해당 위치로 이동. 사이 항목들은 한 칸씩 밀림. */
+  function moveTo(currentIndex: number, newPosition1Based: number) {
+    setSelectedIds((prev) => {
+      const target =
+        Math.max(1, Math.min(prev.length, newPosition1Based)) - 1;
+      if (target === currentIndex) return prev;
+      const next = [...prev];
+      const [item] = next.splice(currentIndex, 1);
+      next.splice(target, 0, item);
       return next;
     });
   }
@@ -326,6 +338,10 @@ export default function EditCollectionPage({
               <CardTitle className="text-base">
                 선택된 상품 (노출 순서)
               </CardTitle>
+              <p className="text-xs text-muted-foreground">
+                새로 추가한 상품은 1번으로 들어와요. 순번을 직접 입력하면 그
+                자리로 이동하고, 기존 상품은 한 칸씩 밀립니다.
+              </p>
             </CardHeader>
             <CardContent className="p-0">
               {selectedProducts.length === 0 ? (
@@ -341,9 +357,37 @@ export default function EditCollectionPage({
                         key={p.id}
                         className="flex items-center gap-3 px-4 py-2"
                       >
-                        <span className="w-8 shrink-0 text-center text-xs text-muted-foreground">
-                          {idx + 1}
-                        </span>
+                        <Input
+                          key={`pos-${p.id}-${idx}`}
+                          type="number"
+                          defaultValue={idx + 1}
+                          min={1}
+                          max={selectedProducts.length}
+                          aria-label={`${p.name} 순번`}
+                          className="h-7 w-14 shrink-0 px-1.5 text-center text-xs"
+                          onFocus={(e) => e.currentTarget.select()}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.currentTarget.blur();
+                            } else if (e.key === "Escape") {
+                              e.currentTarget.value = String(idx + 1);
+                              e.currentTarget.blur();
+                            }
+                          }}
+                          onBlur={(e) => {
+                            const raw = e.currentTarget.value.trim();
+                            const parsed = Number(raw);
+                            if (
+                              !raw ||
+                              Number.isNaN(parsed) ||
+                              parsed === idx + 1
+                            ) {
+                              e.currentTarget.value = String(idx + 1);
+                              return;
+                            }
+                            moveTo(idx, parsed);
+                          }}
+                        />
                         <div className="size-12 shrink-0 overflow-hidden rounded bg-muted">
                           {p.imageUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
