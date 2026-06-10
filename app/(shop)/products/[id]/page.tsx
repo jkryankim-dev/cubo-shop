@@ -445,8 +445,12 @@ export default function ProductDetailPage({
                 }
               />
               <InfoRow
-                label="제조사·원산지"
-                value="상품 등록 시 ERP 에서 입력"
+                label="제조사"
+                value={product.manufacturer || "중국"}
+              />
+              <InfoRow
+                label="원산지"
+                value={product.origin || "중국"}
               />
             </dl>
           </CardContent>

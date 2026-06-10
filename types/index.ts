@@ -52,6 +52,21 @@ export interface Product {
   /** ERP 표기 — number (ms epoch). Timestamp 가 아님에 주의. */
   createdAt: number;
   /**
+   * 제조사 (cubo-shop 의 /admin/product-info 에서 수정 가능).
+   * 미입력 시 상품 상세에서 "중국" 으로 노출됨.
+   *
+   * ⚠️ ERP `products` 컬렉션의 원 데이터에 직접 쓰는 필드입니다.
+   * cubo-shop 이 ERP 원본을 수정하는 두 필드 중 하나 (다른 하나 = origin).
+   */
+  manufacturer?: string;
+  /**
+   * 원산지 (cubo-shop 의 /admin/product-info 에서 수정 가능).
+   * 미입력 시 상품 상세에서 "중국" 으로 노출됨.
+   *
+   * ⚠️ ERP `products` 컬렉션의 원 데이터에 직접 쓰는 필드입니다.
+   */
+  origin?: string;
+  /**
    * 안전재고 (cubo-shop 측 정책, ERP 와 무관).
    * 코드에서 `shop_safety_stocks` 컬렉션의 값을 join 해서 채우는 임시 필드.
    * Firestore products 에는 저장되지 않음.

@@ -52,11 +52,15 @@ cuboerp 와 **동일한 Firebase 프로젝트** 를 공유합니다.
 ### ERP 소유 컬렉션 (cuboerp 가 관리)
 | 컬렉션 | 권한 |
 |---|---|
-| `products` | **읽기만** (노출 조건은 ERP 의 `tags` 에 `'ON'` 포함, `isDeleted/hidden` 한 번 더 체크. 단가는 `priceA ?? defaultPrice`) |
+| `products` | **거의 모든 필드 읽기만**. 노출 조건 = ERP 의 `tags` 에 `'ON'` 포함, `isDeleted/hidden` 한 번 더 체크. 단가는 `priceA ?? defaultPrice` |
+| `products.manufacturer`, `products.origin` | **cubo-shop /admin/product-info 에서 Admin SDK Server Action 으로 patch 가능 (관리자만, 화이트리스트)**. 미입력 시 상품 상세에서 "중국" 으로 노출. 그 외 모든 필드는 ERP 단일 진실 |
 | `products.stock` | **주문 생성 시점에 cubo-shop 서버 SDK 트랜잭션으로 차감**, 결제 실패/취소 시 트랜잭션으로 복원. ERP 의 자체 흐름 (입고·조정·반품) 은 ERP 가 처리 |
-| `orders`, `users`, `entities` 등 기타 ERP 컬렉션 | **접근 금지** (cubo-shop 은 read-only `products` 만) |
+| `orders`, `users`, `entities` 등 기타 ERP 컬렉션 | **접근 금지** (cubo-shop 은 위 `products` 화이트리스트 외 ERP 컬렉션 미접근) |
 
 > `priceB` / `priceC` / `priceCOST` 는 B2B 단가 — 쇼핑몰에서 무시.
+>
+> `products` 에 새 화이트리스트 필드를 추가할 일이 생기면 반드시 ERP 측과
+> 사전 합의 후 `lib/actions/products.ts` 의 `updateProductMetaAction` 에 추가.
 
 ### 쇼핑몰 전용 컬렉션 (모두 `shop_` 접두사)
 | 컬렉션 | 용도 |
