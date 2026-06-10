@@ -281,8 +281,16 @@ export async function createPendingOrderAction(
  * ERP 의 shop-orders sync 엔드포인트 호출 (best-effort).
  * cubo-shop → ERP 자동 반영의 단일 진입점입니다.
  * 호출 실패해도 결제 결과에는 영향이 없도록 try/catch 처리.
+ *
+ * trigger 종류:
+ *   - "payment-confirm"  : 무통장 입금 확인 (pending → paid)
+ *   - "shipped"          : 송장 입력·발송 처리 (preparing → shipped)
+ *                          → ERP 가 이 시점에 전자세금계산서 발행하도록 합의됨
  */
-async function notifyErpOrderSync(): Promise<void> {
+async function notifyErpOrderSync(
+  trigger: "payment-confirm" | "shipped",
+  orderId: string,
+): Promise<void> {
   const url = process.env.ERP_SYNC_URL;
   const secret = process.env.ERP_SYNC_SECRET;
   if (!url || !secret) return; // 미설정 시 조용히 skip
@@ -292,7 +300,7 @@ async function notifyErpOrderSync(): Promise<void> {
       Authorization: `Bearer ${secret}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ source: "cubo-shop", trigger: "payment-confirm" }),
+    body: JSON.stringify({ source: "cubo-shop", trigger, orderId }),
     signal: AbortSignal.timeout(5000),
   });
 }
@@ -449,6 +457,14 @@ export async function adminUpdateOrderAction(
     console.warn("[alimtalk] status-transition 발송 실패", err);
   }
 
+  // shipped 전환 시 ERP webhook 한 번 더 호출 → ERP 가 전자세금계산서 발행 트리거.
+  // 송장 추가 (재발송) 만 한 경우는 status 변동 없으므로 webhook 안 보냄.
+  if (before.status !== "shipped" && after.status === "shipped") {
+    await notifyErpOrderSync("shipped", input.orderId).catch((err) =>
+      console.warn("[erp-sync] shipped 호출 실패", err),
+    );
+  }
+
   return { success: true, message: "주문이 갱신되었습니다." };
 }
 
@@ -486,7 +502,7 @@ export async function manuallyMarkPaidAction(
   }).catch((err) =>
     console.warn("[alimtalk] manual paid 발송 실패", err),
   );
-  await notifyErpOrderSync().catch((err) =>
+  await notifyErpOrderSync("payment-confirm", orderId).catch((err) =>
     console.warn("[erp-sync] 호출 실패", err),
   );
 
