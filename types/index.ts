@@ -209,22 +209,31 @@ export interface ShopOrder {
   shippingAddress: ShippingAddress;
   trackingNumber?: string;
   carrier?: string;
-  /** 비회원(익명) 결제 여부 — GUEST_CHECKOUT 흐름. 토스 승인 후 제거 시 항상 false 가 됨 */
-  isGuest?: boolean;
-  /** 토스페이먼츠 paymentKey (confirm 후 발급) */
-  paymentId?: string;
-  /** 결제 수단 (CARD / TRANSFER / VIRTUAL_ACCOUNT 등) */
+  /** 결제 수단 (현재 운영: "BANK_TRANSFER" 만. 과거 토스 흐름의 CARD/VIRTUAL_ACCOUNT 호환용으로 string) */
   paymentMethod?: string;
-  /** 가상계좌 발급 정보 (paymentMethod === "VIRTUAL_ACCOUNT" 일 때) */
+  /** 입금받을 회사 법인계좌 스냅샷 (주문 시점의 settings 값). 무통장입금 안내 표시용. */
+  depositAccount?: ShopOrderDepositAccount;
+  /** @deprecated 토스 가상계좌 흐름은 폐기됨. 기존 주문 호환용으로만 유지. */
+  paymentId?: string;
+  /** @deprecated 토스 가상계좌 흐름은 폐기됨. 기존 주문 호환용으로만 유지. */
   virtualAccount?: ShopOrderVirtualAccount;
   /** 입금대기 만료 시각 (createdAt + 6시간). 경과 시 자동 cancelled */
   expiresAt?: Timestamp;
-  /** 무통장입금 등 수동 입금 마킹 시 (관리자 uid) */
+  /** 무통장입금 수동 입금 마킹 시 (관리자 uid) */
   manuallyPaidBy?: string;
   /** 취소 사유 (auto-expired / manual / payment-fail 등) */
   cancelReason?: string;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
+}
+
+/** 무통장입금 안내용 회사 법인계좌 스냅샷. 주문 시점의 settings 값을 박아둠. */
+export interface ShopOrderDepositAccount {
+  bankName: string;
+  accountNumber: string;
+  accountHolder: string;
+  /** 입금자명 가이드 (예: 주문자명 또는 회사명) */
+  depositorGuide?: string;
 }
 
 // ---------------------------------------------------------------------
@@ -279,4 +288,20 @@ export interface ShopCollection {
   createdBy?: string;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
+}
+
+// ---------------------------------------------------------------------
+// SitePaymentSettings — 무통장입금용 회사 법인계좌 설정
+// 컬렉션: shop_site_settings/payment
+//
+// /admin/settings 에서 관리자가 입력. 결제·주문 안내 화면이 이 값을 읽음.
+// ---------------------------------------------------------------------
+export interface SitePaymentSettings {
+  bankName: string;
+  accountNumber: string;
+  accountHolder: string;
+  /** 입금 시 안내 문구 (예: "입금자명에 주문자명을 적어주세요") */
+  noticeText?: string;
+  updatedAt?: Timestamp;
+  updatedBy?: string;
 }

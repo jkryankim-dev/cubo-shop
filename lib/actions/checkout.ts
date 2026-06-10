@@ -1,30 +1,31 @@
 "use server";
 
 // =====================================================================
-// 결제·주문 Server Actions
+// 결제·주문 Server Actions (무통장입금 단일 결제)
 //
 // 흐름:
-//   1) createPendingOrder: 주문 생성 + 재고 차감 (트랜잭션)
-//   2) 클라이언트가 토스 SDK 로 결제 요청
-//   3) confirmPaymentAction: 토스 confirm API 호출 + status=paid
-//   4) failPaymentAction / cancelOrderAction: 재고 복원 + status=cancelled
-//   5) cleanupExpiredOrdersAction: 6시간 경과 pending 자동 취소
+//   1) createPendingOrderAction: 사업자 승인 회원만, 재고 차감 + 주문 생성
+//      → status="pending", paymentMethod="BANK_TRANSFER", 회사 계좌 스냅샷 박음
+//   2) 고객이 회사 법인계좌로 입금
+//   3) manuallyMarkPaidAction: 관리자가 입금 확인 후 status=paid 마킹
+//   4) cancelMyPendingOrderAction / cleanupExpiredOrdersAction: 재고 복원 + cancelled
+//   5) adminUpdateOrderAction: 송장 입력·발송 처리 + 알림톡
 // =====================================================================
 
 import { adminAuth, adminDb } from "@/lib/firebaseAdmin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import {
+  sendBankTransferRequestedAlimtalk,
   sendCancelledAlimtalk,
   sendPaymentConfirmedAlimtalk,
-  sendVirtualAccountIssuedAlimtalk,
 } from "@/lib/alimtalk";
-import { bankNameOf } from "@/lib/banks";
 import { getBundleUnit, getDisplayPrice } from "@/lib/visibility";
 import type {
   Product,
   ShippingAddress,
   ShopCartItem,
   ShopOrder,
+  ShopOrderDepositAccount,
 } from "@/types";
 
 const PAYMENT_HOLD_MS = 6 * 60 * 60 * 1000; // 6시간
@@ -51,52 +52,102 @@ async function verifyAdmin(idToken: string): Promise<string | null> {
   return adminDoc.exists ? uid : null;
 }
 
+/** 회사 법인계좌 (shop_site_settings/payment) 스냅샷 fetch. 미설정 시 null. */
+async function fetchDepositAccountSnapshot(): Promise<ShopOrderDepositAccount | null> {
+  const snap = await adminDb()
+    .collection("shop_site_settings")
+    .doc("payment")
+    .get();
+  if (!snap.exists) return null;
+  const data = snap.data() as {
+    bankName?: string;
+    accountNumber?: string;
+    accountHolder?: string;
+    noticeText?: string;
+  };
+  if (!data.bankName || !data.accountNumber || !data.accountHolder) return null;
+  return {
+    bankName: data.bankName,
+    accountNumber: data.accountNumber,
+    accountHolder: data.accountHolder,
+    depositorGuide: data.noticeText || undefined,
+  };
+}
+
 // ---------------------------------------------------------------------
 // 1) 주문 생성 + 재고 차감 (트랜잭션)
 // ---------------------------------------------------------------------
-// === GUEST_CHECKOUT (토스 승인 후 제거) ===
-// 비회원/회원 모두 사용 가능한 주문자 정보 인자. 회원 전용으로 회귀 시
-// `buyerInfo` 필드 + isGuest 처리 + signInAsGuest 호출처 grep 으로 제거하세요.
 export interface BuyerInfo {
   name: string;
   phone: string;
   email: string;
 }
-// === GUEST_CHECKOUT END ===
 
 export interface CreatePendingOrderInput {
   idToken: string;
   items: ShopCartItem[];
   shippingAddress: ShippingAddress;
-  /** 주문자 정보 (회원이면 프로필보다 입력값 우선). GUEST_CHECKOUT 흐름에서 필수. */
+  /** 주문자 정보 (회원이면 프로필보다 입력값 우선) */
   buyerInfo?: BuyerInfo;
 }
 
 export async function createPendingOrderAction(
   input: CreatePendingOrderInput,
-): Promise<ActionResult<{ orderId: string; amount: number; orderName: string }>> {
+): Promise<
+  ActionResult<{
+    orderId: string;
+    amount: number;
+    orderName: string;
+    depositAccount: ShopOrderDepositAccount;
+  }>
+> {
   const uid = await verifyAuth(input.idToken);
   if (!uid) return { success: false, message: "로그인이 필요합니다." };
 
   if (!input.items.length)
     return { success: false, message: "장바구니가 비어있습니다." };
 
-  // 회원 프로필 (있으면) — 비회원(익명)이면 없음
+  // 사업자 승인 회원만 결제 가능 — 서버 측 강제 검증
   const customerSnap = await adminDb()
     .collection("shop_customers")
     .doc(uid)
     .get();
-  const customer = customerSnap.exists
-    ? (customerSnap.data() as {
-        name?: string;
-        companyName?: string;
-        grade?: "general" | "business";
-        phone?: string;
-        email?: string;
-      })
-    : null;
+  if (!customerSnap.exists) {
+    return {
+      success: false,
+      message:
+        "회원 정보가 없습니다. 회원가입 후 사업자등록증을 등록해주세요.",
+    };
+  }
+  const customer = customerSnap.data() as {
+    name?: string;
+    companyName?: string;
+    grade?: "general" | "business";
+    phone?: string;
+    email?: string;
+    businessLicense?: { status?: "pending" | "approved" | "rejected" };
+  };
+  if (
+    customer.grade !== "business" ||
+    customer.businessLicense?.status !== "approved"
+  ) {
+    return {
+      success: false,
+      message:
+        "사업자 승인 회원만 주문 가능합니다. 마이페이지에서 사업자등록증을 등록·승인받아주세요.",
+    };
+  }
 
-  // 주문자 정보 결정: buyerInfo 우선, 없으면 회원 프로필, 그것도 없으면 에러
+  // 회사 법인계좌 설정 필수 — 미설정 시 결제 차단
+  const depositAccount = await fetchDepositAccountSnapshot();
+  if (!depositAccount) {
+    return {
+      success: false,
+      message:
+        "결제 계좌가 설정되지 않았습니다. 운영자에게 문의해주세요.",
+    };
+  }
+
   const buyerName = input.buyerInfo?.name?.trim() || customer?.name || "";
   const buyerPhone = input.buyerInfo?.phone?.trim() || customer?.phone || "";
   const buyerEmail = input.buyerInfo?.email?.trim() || customer?.email || "";
@@ -106,11 +157,10 @@ export async function createPendingOrderAction(
       message: "주문자 정보(이름·전화·이메일)를 모두 입력해주세요.",
     };
   }
-  const isGuest = !customer;
 
   const orderId = adminDb().collection("shop_orders").doc().id;
 
-  const result = await adminDb().runTransaction(async (tx) => {
+  const txResult = await adminDb().runTransaction(async (tx) => {
     let totalAmount = 0;
     const orderItems: ShopOrder["items"] = [];
 
@@ -153,7 +203,6 @@ export async function createPendingOrderAction(
       tx.update(productRef, {
         stock: FieldValue.increment(-it.quantity),
       });
-      // 가격은 lib/visibility 의 getDisplayPrice 사용 (3% 인상 + 1원 내림)
       const unitPrice = getDisplayPrice(product);
       const lineTotal = unitPrice * it.quantity;
       totalAmount += lineTotal;
@@ -169,7 +218,6 @@ export async function createPendingOrderAction(
 
     const expiresAt = Timestamp.fromMillis(Date.now() + PAYMENT_HOLD_MS);
 
-    // 객체 리터럴로 직접 set — admin/client Timestamp 타입 차이를 피함
     tx.set(adminDb().collection("shop_orders").doc(orderId), {
       id: orderId,
       customerUid: uid,
@@ -177,157 +225,56 @@ export async function createPendingOrderAction(
       customerCompany:
         customer?.companyName ??
         (customer?.grade === "business" ? customer.name : undefined),
-      customerGrade: customer?.grade ?? "general",
+      customerGrade: customer?.grade ?? "business",
       customerPhone: buyerPhone,
       customerEmail: buyerEmail,
-      isGuest,
       items: orderItems,
       totalAmount,
       status: "pending",
+      paymentMethod: "BANK_TRANSFER",
+      depositAccount,
       shippingAddress: input.shippingAddress,
       expiresAt,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
 
-    return { totalAmount, orderName: orderItems[0]?.name ?? "주문" };
+    return { totalAmount, orderName: orderItems[0]?.name ?? "주문", orderItems };
   });
 
   const orderName =
     input.items.length > 1
-      ? `${result.orderName} 외 ${input.items.length - 1}건`
-      : result.orderName;
+      ? `${txResult.orderName} 외 ${input.items.length - 1}건`
+      : txResult.orderName;
+
+  // 무통장입금 안내 알림톡 (실패해도 주문 결과 영향 X)
+  const orderForAlimtalk: ShopOrder = {
+    id: orderId,
+    customerUid: uid,
+    customerName: buyerName,
+    customerPhone: buyerPhone,
+    customerEmail: buyerEmail,
+    items: txResult.orderItems,
+    totalAmount: txResult.totalAmount,
+    status: "pending",
+    shippingAddress: input.shippingAddress,
+    paymentMethod: "BANK_TRANSFER",
+    depositAccount,
+  };
+  sendBankTransferRequestedAlimtalk(orderForAlimtalk).catch((err) =>
+    console.warn("[alimtalk] bank-transfer-requested 발송 실패", err),
+  );
 
   return {
     success: true,
-    message: "주문이 접수되었습니다.",
+    message: "주문이 접수되었습니다. 안내된 계좌로 입금해주세요.",
     data: {
       orderId,
-      amount: result.totalAmount,
+      amount: txResult.totalAmount,
       orderName,
+      depositAccount,
     },
   };
-}
-
-// ---------------------------------------------------------------------
-// 2) 토스 결제 확정 (successUrl 콜백에서 호출)
-// ---------------------------------------------------------------------
-export interface ConfirmPaymentInput {
-  paymentKey: string;
-  orderId: string;
-  amount: number;
-}
-
-export async function confirmPaymentAction(
-  input: ConfirmPaymentInput,
-): Promise<ActionResult> {
-  const secretKey = process.env.TOSS_SECRET_KEY;
-  if (!secretKey)
-    return {
-      success: false,
-      message: "결제 환경변수 (TOSS_SECRET_KEY) 가 비어있습니다.",
-    };
-
-  // 주문 검증 (위변조 방지: 우리 DB 의 totalAmount 와 일치하는지)
-  const orderRef = adminDb().collection("shop_orders").doc(input.orderId);
-  const orderSnap = await orderRef.get();
-  if (!orderSnap.exists) return { success: false, message: "주문 없음" };
-  const order = orderSnap.data() as ShopOrder;
-  if (order.totalAmount !== input.amount) {
-    return { success: false, message: "결제 금액이 주문 금액과 다릅니다." };
-  }
-  if (order.status !== "pending") {
-    return {
-      success: true,
-      message: `이미 처리된 주문입니다 (status=${order.status}).`,
-    };
-  }
-
-  // 토스 confirm API
-  const auth = Buffer.from(`${secretKey}:`).toString("base64");
-  const res = await fetch("https://api.tosspayments.com/v1/payments/confirm", {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${auth}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      paymentKey: input.paymentKey,
-      orderId: input.orderId,
-      amount: input.amount,
-    }),
-  });
-  if (!res.ok) {
-    const errText = await res.text();
-    return {
-      success: false,
-      message: `토스 결제 확인 실패: ${errText.slice(0, 200)}`,
-    };
-  }
-  const tossData = (await res.json()) as {
-    method?: string;
-    paymentKey?: string;
-    status?: string;
-    virtualAccount?: {
-      accountNumber?: string;
-      bankCode?: string;
-      dueDate?: string;
-    };
-  };
-
-  // 가상계좌 발급 — 입금 대기 (status: WAITING_FOR_DEPOSIT)
-  if (
-    tossData.status === "WAITING_FOR_DEPOSIT" &&
-    tossData.virtualAccount?.accountNumber
-  ) {
-    const va = tossData.virtualAccount;
-    const accountNumber = va.accountNumber!; // 위 if 에서 검증
-    const virtualAccount = {
-      bankCode: va.bankCode,
-      bankName: bankNameOf(va.bankCode),
-      accountNumber,
-      dueDate: va.dueDate,
-    };
-    await orderRef.update({
-      paymentId: tossData.paymentKey ?? input.paymentKey,
-      paymentMethod: tossData.method ?? "VIRTUAL_ACCOUNT",
-      virtualAccount,
-      updatedAt: FieldValue.serverTimestamp(),
-    });
-    await sendVirtualAccountIssuedAlimtalk({
-      ...order,
-      paymentMethod: "VIRTUAL_ACCOUNT",
-      virtualAccount,
-    }).catch((err) =>
-      console.warn("[alimtalk] virtual-account-issued 발송 실패", err),
-    );
-    return {
-      success: true,
-      message:
-        "가상계좌가 발급되었습니다. 6시간 이내 입금해주시면 주문이 확정됩니다.",
-    };
-  }
-
-  // 그 외 — DONE 등 즉시 결제 확정 (카드 등)
-  await orderRef.update({
-    status: "paid",
-    paymentId: tossData.paymentKey ?? input.paymentKey,
-    paymentMethod: tossData.method ?? null,
-    updatedAt: FieldValue.serverTimestamp(),
-  });
-
-  // 알림톡 — 결제 확정 (실패해도 결제 결과 영향 X)
-  const updated = { ...order, status: "paid" as const };
-  await sendPaymentConfirmedAlimtalk(updated).catch((err) =>
-    console.warn("[alimtalk] payment-confirmed 발송 실패", err),
-  );
-
-  // ERP 동기화 webhook (실패해도 결제 결과에는 영향 X)
-  await notifyErpOrderSync().catch((err) =>
-    console.warn("[erp-sync] 호출 실패 — 관리자 수동 재동기화 필요할 수 있음", err),
-  );
-
-  return { success: true, message: "결제 확정되었습니다." };
 }
 
 /**
@@ -346,13 +293,12 @@ async function notifyErpOrderSync(): Promise<void> {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ source: "cubo-shop", trigger: "payment-confirm" }),
-    // 5초 타임아웃 — Next.js Server Action 의 응답 지연을 막음
     signal: AbortSignal.timeout(5000),
   });
 }
 
 // ---------------------------------------------------------------------
-// 3) 결제 실패 / 사용자 취소 / 만료 — 재고 복원 + status=cancelled
+// 2) 주문 취소 — 재고 복원 + status=cancelled (사용자 / 만료 / 관리자)
 // ---------------------------------------------------------------------
 async function cancelOrderInternal(
   orderId: string,
@@ -367,7 +313,6 @@ async function cancelOrderInternal(
     const order = orderSnap.data() as ShopOrder;
     if (order.status !== "pending") return; // 이미 처리됨
 
-    // 재고 복원
     for (const it of order.items) {
       tx.update(adminDb().collection("products").doc(it.productId), {
         stock: FieldValue.increment(it.quantity),
@@ -385,21 +330,6 @@ async function cancelOrderInternal(
     await sendCancelledAlimtalk(cancelled, reason).catch((err) =>
       console.warn("[alimtalk] cancelled 발송 실패", err),
     );
-  }
-}
-
-export async function failPaymentAction(
-  orderId: string,
-  reason = "payment-fail",
-): Promise<ActionResult> {
-  try {
-    await cancelOrderInternal(orderId, reason);
-    return { success: true, message: "주문이 취소되었습니다." };
-  } catch (err) {
-    return {
-      success: false,
-      message: err instanceof Error ? err.message : "취소 실패",
-    };
   }
 }
 
@@ -431,8 +361,7 @@ export async function cancelMyPendingOrderAction(
 }
 
 // ---------------------------------------------------------------------
-// 4) 6시간 경과 pending 자동 정리
-//    /admin/orders 진입 시 + cron (추후) 둘 다에서 호출 가능.
+// 3) 6시간 경과 pending 자동 정리
 // ---------------------------------------------------------------------
 export async function cleanupExpiredOrdersAction(): Promise<
   ActionResult<{ cleaned: number }>
@@ -460,12 +389,7 @@ export async function cleanupExpiredOrdersAction(): Promise<
 }
 
 // ---------------------------------------------------------------------
-// 5) 무통장입금 등 수동 입금 마킹 (관리자)
-// ---------------------------------------------------------------------
-// ---------------------------------------------------------------------
-// 6) 관리자 — 주문 상태/송장 변경 + 알림톡 자동 발송
-//    클라이언트 SDK 의 updateOrder 와 별개로, 알림톡 트리거가 필요한
-//    상태 전환은 본 Server Action 사용 권장.
+// 4) 관리자 — 주문 상태/송장 변경 + 알림톡 자동 발송
 // ---------------------------------------------------------------------
 export interface AdminUpdateOrderInput {
   idToken: string;
@@ -506,7 +430,6 @@ export async function adminUpdateOrderAction(
     ...(input.carrier !== undefined ? { carrier: input.carrier } : {}),
   };
 
-  // 상태 전환 알림톡 (실패해도 무시)
   try {
     const { sendShippedAlimtalk, sendRefundedAlimtalk } = await import(
       "@/lib/alimtalk"
@@ -522,7 +445,6 @@ export async function adminUpdateOrderAction(
     } else if (transitioned && after.status === "refunded") {
       await sendRefundedAlimtalk(after);
     }
-    // delivered 알림톡은 택배사가 발송하므로 cubo-shop 측 X
   } catch (err) {
     console.warn("[alimtalk] status-transition 발송 실패", err);
   }
@@ -552,16 +474,15 @@ export async function manuallyMarkPaidAction(
   await orderRef.update({
     status: "paid",
     manuallyPaidBy: adminUid,
-    paymentMethod: "MANUAL_TRANSFER",
+    paymentMethod: "BANK_TRANSFER",
     updatedAt: FieldValue.serverTimestamp(),
   });
 
-  // 알림톡 — 결제 확정 (수동 입금 케이스도 동일 템플릿)
   await sendPaymentConfirmedAlimtalk({
     ...order,
     status: "paid",
     manuallyPaidBy: adminUid,
-    paymentMethod: "MANUAL_TRANSFER",
+    paymentMethod: "BANK_TRANSFER",
   }).catch((err) =>
     console.warn("[alimtalk] manual paid 발송 실패", err),
   );

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAuth } from "@/components/auth/auth-provider";
 import {
   getCartItems,
   removeFromCart,
@@ -24,8 +25,10 @@ interface CartLine extends ShopCartItem {
 }
 
 export default function CartView() {
+  const { user, approvedBusiness, loading: authLoading } = useAuth();
   const [lines, setLines] = useState<CartLine[]>([]);
   const [loading, setLoading] = useState(true);
+  const showPrices = !authLoading && approvedBusiness;
 
   const refresh = useCallback(async () => {
     const items = getCartItems();
@@ -116,9 +119,11 @@ export default function CartView() {
                           >
                             {line.product.name}
                           </Link>
-                          <p className="mt-1 text-sm font-bold text-brand-pink">
-                            {formatPriceKRW(getDisplayPrice(line.product))}
-                          </p>
+                          {showPrices && (
+                            <p className="mt-1 text-sm font-bold text-brand-pink">
+                              {formatPriceKRW(getDisplayPrice(line.product))}
+                            </p>
+                          )}
                         </>
                       ) : (
                         <p className="text-sm text-muted-foreground">
@@ -165,12 +170,15 @@ export default function CartView() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-bold">
-                        {formatPriceKRW(
-                          (line.product ? getDisplayPrice(line.product) : 0) *
-                            line.quantity,
-                        )}
-                      </p>
+                      {showPrices && (
+                        <p className="text-sm font-bold">
+                          {formatPriceKRW(
+                            (line.product
+                              ? getDisplayPrice(line.product)
+                              : 0) * line.quantity,
+                          )}
+                        </p>
+                      )}
                       <Button
                         variant="ghost"
                         size="icon"
@@ -190,24 +198,57 @@ export default function CartView() {
           <Card className="h-fit">
             <CardContent className="space-y-4 p-6">
               <h2 className="text-lg font-semibold">주문 요약</h2>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">상품 합계</span>
-                <span>{formatPriceKRW(total)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">배송비</span>
-                <span>주문 시 산출</span>
-              </div>
-              <Separator />
-              <div className="flex justify-between text-base font-bold">
-                <span>총 결제 예정</span>
-                <span className="text-brand-pink">{formatPriceKRW(total)}</span>
-              </div>
-              <Link href="/checkout" className="block">
-                <Button className="w-full" size="lg">
-                  결제하기
-                </Button>
-              </Link>
+              {showPrices ? (
+                <>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">상품 합계</span>
+                    <span>{formatPriceKRW(total)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">배송비</span>
+                    <span>주문 시 산출</span>
+                  </div>
+                  <Separator />
+                  <div className="flex justify-between text-base font-bold">
+                    <span>총 결제 예정</span>
+                    <span className="text-brand-pink">
+                      {formatPriceKRW(total)}
+                    </span>
+                  </div>
+                  <Link href="/checkout" className="block">
+                    <Button className="w-full" size="lg">
+                      결제하기
+                    </Button>
+                  </Link>
+                </>
+              ) : (
+                <div className="rounded-md border border-dashed border-brand-pink/40 bg-brand-pink/5 p-3 text-center text-xs">
+                  <p className="text-sm font-semibold">
+                    사업자 승인 회원 전용
+                  </p>
+                  <p className="mt-1 text-muted-foreground">
+                    가격·결제는 사업자등록증 승인 후 표시됩니다.
+                  </p>
+                  <div className="mt-3 flex justify-center gap-2">
+                    {!user ? (
+                      <>
+                        <Link href="/login">
+                          <Button size="sm" variant="outline">
+                            로그인
+                          </Button>
+                        </Link>
+                        <Link href="/signup">
+                          <Button size="sm">사업자 회원가입</Button>
+                        </Link>
+                      </>
+                    ) : (
+                      <Link href="/mypage/business-license">
+                        <Button size="sm">사업자등록증 등록</Button>
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

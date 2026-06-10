@@ -16,51 +16,38 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/components/auth/auth-provider";
 import { db } from "@/lib/firebase";
-import { signInAsGuest } from "@/lib/auth";
 import { clearCart, getCartItems } from "@/lib/cart";
 import { formatPriceKRW, formatPhone } from "@/lib/format";
 import { getDisplayPrice, isShoppableProduct } from "@/lib/visibility";
 import { createPendingOrderAction } from "@/lib/actions/checkout";
-import type { Product, ShopCartItem } from "@/types";
+import { getPaymentSettings } from "@/lib/site-settings";
+import type { Product, ShopCartItem, SitePaymentSettings } from "@/types";
 
 interface Line extends ShopCartItem {
   product: Product | null;
 }
 
-const TOSS_CLIENT_KEY = process.env.NEXT_PUBLIC_TOSS_CLIENT_KEY ?? "";
-
 export default function CheckoutView() {
-  const { user, profile, loading } = useAuth();
+  const { user, profile, approvedBusiness, loading } = useAuth();
   const router = useRouter();
   const [lines, setLines] = useState<Line[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [depositAccount, setDepositAccount] =
+    useState<SitePaymentSettings | null>(null);
 
-  // === GUEST_CHECKOUT (토스 승인 후 제거) ===
-  // 비회원이 진입하면 한 번 자동으로 익명 로그인.
-  // Firebase Anonymous Auth 가 콘솔에서 활성화되어 있어야 함.
-  // 토스 승인 후 회원 전용으로 회귀 시:
-  //   1. 본 useEffect 블록 제거
-  //   2. 아래 isGuest 분기 제거
-  //   3. !user 시 router.replace("/login?redirect=/checkout") 로 변경
-  const [guestSignInAttempted, setGuestSignInAttempted] = useState(false);
+  // 결제 자격: 사업자 승인 회원 (auth-provider 의 derived state)
+  const canCheckout = !!user && !user.isAnonymous && approvedBusiness;
+
+  // 비로그인 사용자는 로그인 페이지로 (비회원 결제 완전 차단)
   useEffect(() => {
     if (loading) return;
-    if (user) return;
-    if (guestSignInAttempted) return;
-    setGuestSignInAttempted(true);
-    signInAsGuest().catch((err) => {
-      console.error("[guest-checkout] anonymous sign-in failed", err);
-      toast.error(
-        "비회원 결제 환경 준비에 실패했어요. 로그인 후 다시 시도해주세요.",
-      );
+    if (!user) {
       router.replace("/login?redirect=/checkout");
-    });
-  }, [loading, user, guestSignInAttempted, router]);
-  const isGuest = !!user && user.isAnonymous;
-  // === GUEST_CHECKOUT END ===
+    }
+  }, [loading, user, router]);
 
-  // 주문자 정보 (회원이면 프로필 자동 채움, 비회원이면 직접 입력)
+  // 주문자 정보
   const [buyerName, setBuyerName] = useState("");
   const [buyerPhone, setBuyerPhone] = useState("");
   const [buyerEmail, setBuyerEmail] = useState("");
@@ -74,7 +61,6 @@ export default function CheckoutView() {
   const [memo, setMemo] = useState("");
   const [postcodeOpen, setPostcodeOpen] = useState(false);
   const [sameAsBuyer, setSameAsBuyer] = useState(true);
-  const [paymentMethod, setPaymentMethod] = useState<"CARD" | "VIRTUAL_ACCOUNT">("CARD");
 
   // 회원 프로필 → 폼 초기 채움
   useEffect(() => {
@@ -96,6 +82,19 @@ export default function CheckoutView() {
       setShipPhone(buyerPhone);
     }
   }, [sameAsBuyer, buyerName, buyerPhone]);
+
+  // 결제 안내용 회사 법인계좌 정보 fetch
+  useEffect(() => {
+    let cancelled = false;
+    getPaymentSettings()
+      .then((s) => {
+        if (!cancelled) setDepositAccount(s);
+      })
+      .catch((err) => console.error("[checkout] payment settings", err));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // 장바구니 상품 fetch
   useEffect(() => {
@@ -142,12 +141,6 @@ export default function CheckoutView() {
     [lines],
   );
 
-  const orderName = useMemo(() => {
-    if (lines.length === 0) return "주문";
-    const first = lines[0].product?.name ?? "주문";
-    return lines.length > 1 ? `${first} 외 ${lines.length - 1}건` : first;
-  }, [lines]);
-
   const hasUnshoppable = lines.some(
     (l) => l.product && !isShoppableProduct(l.product),
   );
@@ -158,12 +151,10 @@ export default function CheckoutView() {
     setPostcodeOpen(false);
   }
 
-  async function handlePay() {
+  async function handleOrder() {
     if (!user) return;
-    if (!TOSS_CLIENT_KEY) {
-      toast.error(
-        "결제 환경변수 (NEXT_PUBLIC_TOSS_CLIENT_KEY) 가 비어있어요. 토스페이먼츠 키를 채워주세요.",
-      );
+    if (!canCheckout) {
+      toast.error("사업자 승인 회원만 주문 가능합니다.");
       return;
     }
     if (!buyerName.trim() || !buyerPhone.trim() || !buyerEmail.trim()) {
@@ -213,44 +204,10 @@ export default function CheckoutView() {
         setSubmitting(false);
         return;
       }
-
-      // 토스 SDK 는 client 에서만 로드 (SSR 시 모듈 로드 회피)
-      const { ANONYMOUS, loadTossPayments } = await import(
-        "@tosspayments/tosspayments-sdk"
-      );
-      const toss = await loadTossPayments(TOSS_CLIENT_KEY);
-      const payment = toss.payment({ customerKey: ANONYMOUS });
-
-      const baseRequest = {
-        amount: { currency: "KRW" as const, value: result.data.amount },
-        orderId: result.data.orderId,
-        orderName: result.data.orderName,
-        successUrl: `${window.location.origin}/order/success`,
-        failUrl: `${window.location.origin}/order/fail`,
-        customerEmail: buyerEmail.trim() || undefined,
-        customerName: buyerName.trim() || undefined,
-        customerMobilePhone: buyerPhone.replace(/-/g, "") || undefined,
-      };
-
-      if (paymentMethod === "VIRTUAL_ACCOUNT") {
-        await payment.requestPayment({
-          method: "VIRTUAL_ACCOUNT",
-          ...baseRequest,
-          virtualAccount: {
-            cashReceipt: { type: "소득공제" },
-            useEscrow: false,
-            validHours: 6, // 입금 대기 6시간 (cubo-shop 정책과 일치)
-          },
-        });
-      } else {
-        await payment.requestPayment({
-          method: "CARD",
-          ...baseRequest,
-        });
-      }
       clearCart();
+      router.replace(`/order/success?orderId=${result.data.orderId}`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "결제 요청 실패");
+      toast.error(err instanceof Error ? err.message : "주문 접수 실패");
       setSubmitting(false);
     }
   }
@@ -259,6 +216,40 @@ export default function CheckoutView() {
     return (
       <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
         <Skeleton className="h-8 w-32" />
+      </div>
+    );
+  }
+
+  // 사업자 미승인 회원: 결제 차단 + 안내 박스
+  if (!canCheckout) {
+    const licenseStatus = profile?.businessLicense?.status;
+    const detailMsg =
+      licenseStatus === "pending"
+        ? "사업자등록증 검토 중입니다. 운영자 승인 후 결제가 활성화됩니다."
+        : licenseStatus === "rejected"
+          ? "사업자등록증이 반려되었습니다. 마이페이지에서 다시 업로드해주세요."
+          : "사업자등록증을 등록하시면 운영자 검토 후 결제가 활성화됩니다.";
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+            <p className="text-base font-semibold">
+              사업자 승인 회원만 주문 가능합니다
+            </p>
+            <p className="text-sm text-muted-foreground">
+              CUBO 도매몰은 사업자등록증을 등록·승인받은 회원만 구매할 수
+              있습니다. {detailMsg}
+            </p>
+            <div className="mt-2 flex gap-2">
+              <Link href="/mypage/business-license">
+                <Button>사업자등록증 등록</Button>
+              </Link>
+              <Link href="/products">
+                <Button variant="outline">상품 둘러보기</Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -280,29 +271,10 @@ export default function CheckoutView() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
-      <h1 className="text-3xl font-bold tracking-tight">결제</h1>
+      <h1 className="text-3xl font-bold tracking-tight">주문서 작성</h1>
       <p className="mt-1 text-sm text-muted-foreground">
-        결제 후 6시간 이내 입금 완료되지 않으면 자동 취소됩니다.
+        주문 접수 후 6시간 이내 입금 완료되지 않으면 자동 취소됩니다.
       </p>
-
-      {/* === GUEST_CHECKOUT (토스 승인 후 제거) === */}
-      {isGuest && (
-        <Card className="mt-4 border-brand-pink/40 bg-brand-pink/5">
-          <CardContent className="flex flex-wrap items-center justify-between gap-2 p-4 text-sm">
-            <span>
-              <strong>비회원 주문</strong> 으로 진행 중입니다. 회원이면 적립금/주문 내역
-              관리에 더 편해요.
-            </span>
-            <Link
-              href="/login?redirect=/checkout"
-              className="font-medium text-brand-pink hover:underline"
-            >
-              로그인 →
-            </Link>
-          </CardContent>
-        </Card>
-      )}
-      {/* === GUEST_CHECKOUT END === */}
 
       <div className="mt-6 space-y-6">
         <Card>
@@ -448,37 +420,32 @@ export default function CheckoutView() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">결제 수단</CardTitle>
+            <CardTitle className="text-lg">결제 수단 — 무통장입금</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setPaymentMethod("CARD")}
-                className={`rounded-md border-2 p-3 text-sm font-medium transition-colors ${
-                  paymentMethod === "CARD"
-                    ? "border-brand-pink bg-brand-pink/5"
-                    : "border-border hover:bg-accent/40"
-                }`}
-              >
-                💳 신용·체크카드
-              </button>
-              <button
-                type="button"
-                onClick={() => setPaymentMethod("VIRTUAL_ACCOUNT")}
-                className={`rounded-md border-2 p-3 text-sm font-medium transition-colors ${
-                  paymentMethod === "VIRTUAL_ACCOUNT"
-                    ? "border-brand-pink bg-brand-pink/5"
-                    : "border-border hover:bg-accent/40"
-                }`}
-              >
-                🏦 가상계좌 (무통장입금)
-              </button>
-            </div>
-            {paymentMethod === "VIRTUAL_ACCOUNT" && (
-              <p className="mt-3 text-xs text-muted-foreground">
-                결제하기 → 토스에서 가상계좌 발급 → <strong>6시간 이내</strong> 입금
-                완료해야 주문이 확정됩니다. 미입금 시 자동 취소됩니다.
+          <CardContent className="space-y-3 text-sm">
+            {depositAccount ? (
+              <>
+                <div className="rounded-md border bg-muted/40 p-4">
+                  <p className="font-semibold">
+                    {depositAccount.bankName} {depositAccount.accountNumber}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    예금주: {depositAccount.accountHolder}
+                  </p>
+                </div>
+                {depositAccount.noticeText && (
+                  <p className="text-xs text-muted-foreground whitespace-pre-line">
+                    {depositAccount.noticeText}
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  주문 접수 후 위 계좌로 <strong>6시간 이내</strong> 입금해주세요.
+                  입금 확인 후 출고됩니다. 미입금 시 자동 취소됩니다.
+                </p>
+              </>
+            ) : (
+              <p className="text-xs text-destructive">
+                결제 계좌가 아직 설정되지 않았어요. 관리자에게 문의해주세요.
               </p>
             )}
           </CardContent>
@@ -496,21 +463,26 @@ export default function CheckoutView() {
             </div>
             <Separator />
             <div className="flex justify-between text-base font-bold">
-              <span>총 결제 예정</span>
+              <span>총 입금 금액</span>
               <span className="text-brand-pink">{formatPriceKRW(total)}</span>
             </div>
             <Button
               className="w-full"
               size="lg"
-              onClick={handlePay}
-              disabled={submitting || loadingProducts || total === 0}
+              onClick={handleOrder}
+              disabled={
+                submitting ||
+                loadingProducts ||
+                total === 0 ||
+                !depositAccount
+              }
             >
               {submitting
-                ? "결제 요청 중…"
-                : `${formatPriceKRW(total)} 결제하기`}
+                ? "주문 접수 중…"
+                : `${formatPriceKRW(total)} 주문하기 (무통장입금)`}
             </Button>
             <p className="text-xs text-muted-foreground">
-              평일 오후 2시 이전 결제 확정 건은 당일 출고를 원칙으로 합니다.
+              평일 오후 2시 이전 입금 확인 건은 당일 출고를 원칙으로 합니다.
             </p>
           </CardContent>
         </Card>

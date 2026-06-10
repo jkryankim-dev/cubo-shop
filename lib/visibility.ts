@@ -46,24 +46,15 @@ export function isSoldOut(p: Product): boolean {
 /**
  * 일반 고객 노출가 산출.
  *
- * 정책:
- *   1) priceA 우선, 없으면 defaultPrice fallback
- *   2) **표시가에 3% 인상** (카드 수수료 흡수용, 사용자 정책)
- *   3) 1원 단위 내림 (Math.floor(x / 10) * 10)
+ * 정책: priceA 우선, 없으면 defaultPrice fallback.
  *
  * 이 함수는 노출가뿐 아니라 결제·주문 시점의 가격 계산에도 사용되어야
  * cubo-shop ↔ ERP 사이 totalAmount 가 일관됩니다.
  * (Server Action 의 createPendingOrderAction 도 동일 함수 호출 — bundleUnit
  *  로 곱한 totalPrice 산출에 사용)
  */
-const DISPLAY_MARKUP = 1.03;
-const PRICE_ROUNDING_UNIT = 10; // 1원 자리 내림
-
 export function getDisplayPrice(p: Product): number {
-  const base = p.priceA ?? p.defaultPrice ?? 0;
-  if (base <= 0) return 0;
-  const inflated = base * DISPLAY_MARKUP;
-  return Math.floor(inflated / PRICE_ROUNDING_UNIT) * PRICE_ROUNDING_UNIT;
+  return p.priceA ?? p.defaultPrice ?? 0;
 }
 
 /**

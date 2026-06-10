@@ -22,6 +22,11 @@ interface AuthContextValue {
   admin: boolean;
   /** 첫 로딩 중 (true 일 때는 깜빡임 방지를 위해 UI 가드) */
   loading: boolean;
+  /**
+   * 사업자 회원 + 사업자등록증 승인 완료 상태.
+   * true 인 회원만 가격을 볼 수 있고 결제 가능 (관리자는 별도).
+   */
+  approvedBusiness: boolean;
   /** 프로필을 다시 읽어옴 (사업자등록증 업로드 후 등) */
   refreshProfile: () => Promise<void>;
 }
@@ -68,9 +73,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await loadProfile(user.uid);
   }
 
+  const approvedBusiness =
+    profile?.grade === "business" &&
+    profile?.businessLicense?.status === "approved";
+
   return (
     <AuthContext.Provider
-      value={{ user, profile, admin, loading, refreshProfile }}
+      value={{
+        user,
+        profile,
+        admin,
+        loading,
+        approvedBusiness,
+        refreshProfile,
+      }}
     >
       {children}
     </AuthContext.Provider>

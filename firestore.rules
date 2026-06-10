@@ -90,6 +90,14 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // -------- shop_site_settings/{key} --------
+    // 사이트 공통 설정 (무통장입금 계좌 등). 누구나 read (결제 안내 화면용),
+    // 쓰기는 관리자만.
+    match /shop_site_settings/{key} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     // 그 외 cubo-shop 이 직접 다루지 않는 컬렉션은 ERP 룰에 의해 결정됨.
     // 이 파일에서 별도 default 매처를 두지 않음 (ERP 룰과 병합 시 충돌 방지).
   }

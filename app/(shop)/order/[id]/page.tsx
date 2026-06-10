@@ -288,20 +288,28 @@ function OrderDetailInner({
           <CardHeader>
             <CardTitle className="text-base">결제 정보</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-1 text-sm">
+          <CardContent className="space-y-2 text-sm">
             <p>
               결제 수단:{" "}
               <span className="text-muted-foreground">
-                {order.paymentMethod ?? "—"}
+                {order.paymentMethod === "BANK_TRANSFER"
+                  ? "무통장입금"
+                  : (order.paymentMethod ?? "—")}
               </span>
             </p>
-            {order.paymentId && (
-              <p className="break-all text-xs text-muted-foreground">
-                결제 ID:{" "}
-                <code className="rounded bg-muted px-1 py-0.5">
-                  {order.paymentId}
-                </code>
-              </p>
+            {isPending && order.depositAccount && (
+              <div className="rounded-md border bg-muted/40 p-3 text-xs">
+                <p className="text-sm font-semibold">
+                  {order.depositAccount.bankName}{" "}
+                  {order.depositAccount.accountNumber}
+                </p>
+                <p className="text-muted-foreground">
+                  예금주: {order.depositAccount.accountHolder}
+                </p>
+                <p className="mt-2 text-muted-foreground">
+                  위 계좌로 6시간 이내 입금해주세요. 미입금 시 자동 취소됩니다.
+                </p>
+              </div>
             )}
             {order.cancelReason && (
               <p className="text-destructive">

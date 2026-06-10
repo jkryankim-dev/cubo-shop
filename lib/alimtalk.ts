@@ -127,33 +127,25 @@ function envOrEmpty(key: string): string {
   return process.env[key] ?? "";
 }
 
-/** 가상계좌 발급 안내 (입금 대기) */
-export async function sendVirtualAccountIssuedAlimtalk(
+/** 무통장입금 안내 (주문 접수 직후 — 입금 대기) */
+export async function sendBankTransferRequestedAlimtalk(
   order: ShopOrder,
 ): Promise<void> {
   if (!order.customerPhone) return;
-  if (!order.virtualAccount) return;
+  if (!order.depositAccount) return;
 
-  const va = order.virtualAccount;
-  const dueDate = va.dueDate
-    ? new Date(va.dueDate).toLocaleString("ko-KR", {
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    : "발급 후 6시간";
-  const account = `${va.bankName ?? ""} ${va.accountNumber}`.trim();
+  const da = order.depositAccount;
+  const account = `${da.bankName} ${da.accountNumber}`;
 
   const msg = `[CUBO MALL] 입금 대기
 
-${order.customerName}님, 가상계좌가 발급되었습니다.
-아래 계좌로 기한 내 입금해주시면 주문이 확정됩니다.
+${order.customerName}님, 주문이 접수되었습니다.
+아래 계좌로 6시간 이내 입금해주시면 주문이 확정됩니다.
 
 ▷ 주문번호: ${shortOrderId(order.id)}
 ▷ 입금금액: ${formatPriceKRW(order.totalAmount)}
 ▷ 입금계좌: ${account}
-▷ 입금기한: ${dueDate}
+▷ 예금주: ${da.accountHolder}
 
 기한 내 미입금 시 자동 취소되며 재고가 복원됩니다.
 
@@ -161,12 +153,12 @@ ${order.customerName}님, 가상계좌가 발급되었습니다.
 
   await sendAlimtalk(
     {
-      templateCode: envOrEmpty("POPBILL_TEMPLATE_VIRTUAL_ACCOUNT_ISSUED"),
+      templateCode: envOrEmpty("POPBILL_TEMPLATE_BANK_TRANSFER_REQUESTED"),
       receiverPhone: order.customerPhone,
       receiverName: order.customerName,
       msg,
     },
-    { orderId: order.id, event: "virtual-account-issued" },
+    { orderId: order.id, event: "bank-transfer-requested" },
   );
 }
 

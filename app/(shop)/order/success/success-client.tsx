@@ -3,111 +3,126 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { CheckCircle2, XCircle } from "lucide-react";
+import { doc, getDoc } from "firebase/firestore";
+import { CheckCircle2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { clearCart } from "@/lib/cart";
-import { confirmPaymentAction } from "@/lib/actions/checkout";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Separator } from "@/components/ui/separator";
+import { db } from "@/lib/firebase";
+import { formatPriceKRW } from "@/lib/format";
+import type { ShopOrder } from "@/types";
 
 export default function SuccessClient() {
   const params = useSearchParams();
-  const paymentKey = params.get("paymentKey") ?? "";
   const orderId = params.get("orderId") ?? "";
-  const amountStr = params.get("amount") ?? "";
 
-  const [state, setState] = useState<"loading" | "ok" | "fail">("loading");
-  const [message, setMessage] = useState<string>("");
+  const [order, setOrder] = useState<ShopOrder | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
-    async function run() {
-      const amount = Number(amountStr);
-      if (!paymentKey || !orderId || !Number.isFinite(amount)) {
-        setState("fail");
-        setMessage("결제 정보가 올바르지 않습니다.");
-        return;
-      }
+    if (!orderId) {
+      setLoading(false);
+      return;
+    }
+    async function load() {
       try {
-        const result = await confirmPaymentAction({
-          paymentKey,
-          orderId,
-          amount,
-        });
+        const snap = await getDoc(doc(db, "shop_orders", orderId));
         if (cancelled) return;
-        if (result.success) {
-          setState("ok");
-          setMessage(result.message);
-          clearCart();
-        } else {
-          setState("fail");
-          setMessage(result.message);
+        if (snap.exists()) {
+          setOrder(snap.data() as ShopOrder);
         }
       } catch (err) {
-        if (cancelled) return;
-        setState("fail");
-        setMessage(err instanceof Error ? err.message : "결제 확인 실패");
+        console.error("[order-success]", err);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     }
-    run();
+    load();
     return () => {
       cancelled = true;
     };
-  }, [paymentKey, orderId, amountStr]);
+  }, [orderId]);
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-12 sm:px-6">
       <Card>
-        <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
-          {state === "loading" && (
+        <CardContent className="space-y-4 py-10">
+          <div className="flex flex-col items-center gap-2 text-center">
+            <CheckCircle2 className="size-10 text-brand-mint" />
+            <h1 className="text-lg font-semibold">주문이 접수되었습니다</h1>
+            <p className="text-sm text-muted-foreground">
+              아래 계좌로 <strong>6시간 이내</strong> 입금해주세요. 입금 확인 후
+              출고됩니다.
+            </p>
+          </div>
+
+          {loading ? (
+            <Skeleton className="h-32 w-full" />
+          ) : !order ? (
+            <p className="text-center text-sm text-destructive">
+              주문 정보를 찾을 수 없습니다.
+            </p>
+          ) : (
             <>
-              <span className="size-8 animate-spin rounded-full border-2 border-brand-pink border-t-transparent" />
-              <p className="text-sm text-muted-foreground">결제 확인 중…</p>
+              <Separator />
+              <dl className="space-y-2 text-sm">
+                <Row label="주문번호">
+                  <code className="rounded bg-muted px-1.5 py-0.5">
+                    {order.id.slice(0, 12)}
+                  </code>
+                </Row>
+                <Row label="입금금액">
+                  <span className="font-bold text-brand-pink">
+                    {formatPriceKRW(order.totalAmount)}
+                  </span>
+                </Row>
+                {order.depositAccount && (
+                  <>
+                    <Row label="입금계좌">
+                      <span className="font-semibold">
+                        {order.depositAccount.bankName}{" "}
+                        {order.depositAccount.accountNumber}
+                      </span>
+                    </Row>
+                    <Row label="예금주">
+                      {order.depositAccount.accountHolder}
+                    </Row>
+                  </>
+                )}
+              </dl>
+              {order.depositAccount?.depositorGuide && (
+                <p className="rounded-md border bg-muted/40 p-3 text-xs text-muted-foreground whitespace-pre-line">
+                  {order.depositAccount.depositorGuide}
+                </p>
+              )}
             </>
           )}
-          {state === "ok" && (
-            <>
-              <CheckCircle2 className="size-10 text-brand-mint" />
-              <p className="text-base font-semibold">결제가 확정되었습니다.</p>
-              <p className="text-sm text-muted-foreground">
-                주문번호:{" "}
-                <code className="rounded bg-muted px-1.5 py-0.5">
-                  {orderId}
-                </code>
-              </p>
-              <p className="text-xs text-muted-foreground">
-                평일 오후 2시 이전 결제 건은 당일 출고를 원칙으로 합니다.
-              </p>
-              <div className="mt-4 flex gap-2">
-                <Link href="/mypage/orders">
-                  <Button variant="outline">주문 내역</Button>
-                </Link>
-                <Link href="/products">
-                  <Button>쇼핑 계속하기</Button>
-                </Link>
-              </div>
-            </>
-          )}
-          {state === "fail" && (
-            <>
-              <XCircle className="size-10 text-destructive" />
-              <p className="text-base font-semibold">결제 확정 실패</p>
-              <p className="text-sm text-destructive">{message}</p>
-              <p className="text-xs text-muted-foreground">
-                같은 주문에 다시 결제를 시도하거나, 마이페이지에서 주문을 취소해주세요.
-              </p>
-              <div className="mt-4 flex gap-2">
-                <Link href="/mypage/orders">
-                  <Button variant="outline">주문 내역</Button>
-                </Link>
-                <Link href="/cart">
-                  <Button>장바구니로</Button>
-                </Link>
-              </div>
-            </>
-          )}
+
+          <div className="flex justify-center gap-2 pt-2">
+            <Link href="/mypage/orders">
+              <Button variant="outline">주문 내역</Button>
+            </Link>
+            <Link href="/products">
+              <Button>쇼핑 계속하기</Button>
+            </Link>
+          </div>
+          <p className="text-center text-xs text-muted-foreground">
+            평일 오후 2시 이전 입금 확인 건은 당일 출고를 원칙으로 합니다.
+          </p>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex justify-between gap-3">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="text-right">{children}</dd>
     </div>
   );
 }

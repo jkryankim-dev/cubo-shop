@@ -12,6 +12,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { ProductCard } from "@/components/shop/product-card";
+import { useAuth } from "@/components/auth/auth-provider";
 import { db } from "@/lib/firebase";
 import { addToCart } from "@/lib/cart";
 import { formatPriceKRW } from "@/lib/format";
@@ -32,6 +33,7 @@ export default function ProductDetailPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
+  const { user, profile, approvedBusiness, loading: authLoading } = useAuth();
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -231,18 +233,20 @@ export default function ProductDetailPage({
             )}
           </div>
 
-          <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-brand-pink">
-              {formatPriceKRW(price)}
-            </span>
-            {product.priceA &&
-              product.defaultPrice &&
-              product.priceA < product.defaultPrice && (
-                <span className="text-sm text-muted-foreground line-through">
-                  {formatPriceKRW(product.defaultPrice)}
-                </span>
-              )}
-          </div>
+          {!authLoading && approvedBusiness && (
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-extrabold text-brand-pink">
+                {formatPriceKRW(price)}
+              </span>
+              {product.priceA &&
+                product.defaultPrice &&
+                product.priceA < product.defaultPrice && (
+                  <span className="text-sm text-muted-foreground line-through">
+                    {formatPriceKRW(product.defaultPrice)}
+                  </span>
+                )}
+            </div>
+          )}
 
           {product.tags && product.tags.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
@@ -261,66 +265,105 @@ export default function ProductDetailPage({
 
           <Separator />
 
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">
-                수량
-                {bundleUnit > 1 && (
-                  <span className="ml-2 text-xs text-muted-foreground">
-                    ({bundleUnit}개 단위로 구매)
-                  </span>
+          {!authLoading && !approvedBusiness ? (
+            // 비로그인 + 일반/미승인 사업자 회원 모두 동일 처리:
+            // 가격·수량·구매 UI 전부 숨기고 사업자 승인 안내 박스
+            <div className="rounded-md border border-dashed border-brand-pink/40 bg-brand-pink/5 p-4 text-center">
+              <p className="text-sm font-semibold">
+                사업자 승인 회원 전용 도매가
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {!user
+                  ? "가격 확인·구매는 사업자 회원 로그인 후 가능합니다."
+                  : profile?.businessLicense?.status === "pending"
+                    ? "사업자등록증 검토 중입니다. 승인되면 가격이 표시됩니다."
+                    : profile?.businessLicense?.status === "rejected"
+                      ? "사업자등록증이 반려되었습니다. 마이페이지에서 다시 업로드해주세요."
+                      : "사업자등록증을 등록하시면 검토 후 가격이 표시됩니다."}
+              </p>
+              <div className="mt-3 flex justify-center gap-2">
+                {!user ? (
+                  <>
+                    <Link href="/login">
+                      <Button size="sm" variant="outline">
+                        로그인
+                      </Button>
+                    </Link>
+                    <Link href="/signup">
+                      <Button size="sm">사업자 회원가입</Button>
+                    </Link>
+                  </>
+                ) : (
+                  <Link href="/mypage/business-license">
+                    <Button size="sm">사업자등록증 등록</Button>
+                  </Link>
                 )}
-              </span>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={decreaseQty}>
-                  −
-                </Button>
-                <span className="min-w-10 text-center text-sm">{quantity}</span>
-                <Button variant="outline" size="sm" onClick={increaseQty}>
-                  +
-                </Button>
               </div>
             </div>
-            <div className="flex items-baseline justify-between rounded-md bg-muted/40 px-3 py-2">
-              <span className="text-sm text-muted-foreground">총 상품 금액</span>
-              <span className="text-xl font-bold text-brand-pink">
-                {formatPriceKRW(subTotal)}
-              </span>
-            </div>
-          </div>
+          ) : (
+            <>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">
+                    수량
+                    {bundleUnit > 1 && (
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        ({bundleUnit}개 단위로 구매)
+                      </span>
+                    )}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={decreaseQty}>
+                      −
+                    </Button>
+                    <span className="min-w-10 text-center text-sm">{quantity}</span>
+                    <Button variant="outline" size="sm" onClick={increaseQty}>
+                      +
+                    </Button>
+                  </div>
+                </div>
+                <div className="flex items-baseline justify-between rounded-md bg-muted/40 px-3 py-2">
+                  <span className="text-sm text-muted-foreground">총 상품 금액</span>
+                  <span className="text-xl font-bold text-brand-pink">
+                    {formatPriceKRW(subTotal)}
+                  </span>
+                </div>
+              </div>
 
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="lg"
-              className="flex-1"
-              disabled={soldOut}
-              onClick={handleAddToCart}
-            >
-              <ShoppingCart className="mr-1.5 size-4" /> 장바구니
-            </Button>
-            <Button
-              size="lg"
-              className="flex-1"
-              disabled={soldOut}
-              onClick={handleInstantBuy}
-            >
-              바로 구매
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="찜"
-              className="size-11"
-              disabled
-            >
-              <Heart />
-            </Button>
-          </div>
-          {soldOut && (
-            <p className="text-sm text-destructive">
-              현재 품절 — 재입고 알림은 추후 단계에서 추가 예정.
-            </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="flex-1"
+                  disabled={soldOut}
+                  onClick={handleAddToCart}
+                >
+                  <ShoppingCart className="mr-1.5 size-4" /> 장바구니
+                </Button>
+                <Button
+                  size="lg"
+                  className="flex-1"
+                  disabled={soldOut}
+                  onClick={handleInstantBuy}
+                >
+                  바로 구매
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="찜"
+                  className="size-11"
+                  disabled
+                >
+                  <Heart />
+                </Button>
+              </div>
+              {soldOut && (
+                <p className="text-sm text-destructive">
+                  현재 품절 — 재입고 알림은 추후 단계에서 추가 예정.
+                </p>
+              )}
+            </>
           )}
 
           <Card className="border-brand-mint/40 bg-brand-mint/10">
@@ -387,10 +430,12 @@ export default function ProductDetailPage({
               {product.barcode && (
                 <InfoRow label="바코드" value={product.barcode} />
               )}
-              <InfoRow
-                label="판매가"
-                value={formatPriceKRW(price)}
-              />
+              {!authLoading && approvedBusiness && (
+                <InfoRow
+                  label="판매가"
+                  value={formatPriceKRW(price)}
+                />
+              )}
               <InfoRow
                 label="재고"
                 value={

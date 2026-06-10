@@ -11,7 +11,6 @@ import {
   deleteUser,
   EmailAuthProvider,
   reauthenticateWithCredential,
-  signInAnonymously as fbSignInAnonymously,
   signInWithEmailAndPassword,
   signOut as fbSignOut,
   updatePassword as fbUpdatePassword,
@@ -104,17 +103,6 @@ export async function signIn(loginId: string, password: string) {
 export async function signOut() {
   return fbSignOut(auth);
 }
-
-// === GUEST_CHECKOUT (토스 승인 후 제거) ===
-// 비회원(게스트) 익명 로그인.
-// Firebase Anonymous Auth 가 콘솔에서 활성화되어 있어야 동작합니다.
-// 결제 시 customerUid 식별 + Server Action 의 idToken 검증 통과를 위해 사용.
-// 토스 심사 통과 후 회원 전용으로 운영하기로 결정되면, 본 함수 + 사용처를 grep
-// 으로 찾아 제거하세요. ("GUEST_CHECKOUT" 검색)
-export async function signInAsGuest() {
-  return fbSignInAnonymously(auth);
-}
-// === GUEST_CHECKOUT END ===
 
 // ---------------------------------------------------------------------
 // 고객 프로필 조회
