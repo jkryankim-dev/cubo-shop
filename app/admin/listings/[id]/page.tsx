@@ -49,6 +49,8 @@ export default function EditCollectionPage({
   const [filter, setFilter] = useState("");
   const [showOnly, setShowOnly] = useState<"available" | "all">("available");
   const [saving, setSaving] = useState(false);
+  /** 방금 이동한 상품 id — 잠깐 행을 강조해서 어디로 갔는지 보이게 */
+  const [recentlyMovedId, setRecentlyMovedId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -158,8 +160,17 @@ export default function EditCollectionPage({
       return next;
     });
   }
-  /** 1-based 순번을 입력하면 해당 위치로 이동. 사이 항목들은 한 칸씩 밀림. */
+  /**
+   * 1-based 순번을 입력하면 해당 위치로 이동.
+   *
+   * 결과 위치는 항상 사용자가 입력한 N번 자리. 사이 항목들은 이동 방향에
+   * 따라 자동으로 한 칸 이동:
+   *   - 위 → 아래 (예: 1번 → 10번): 2~10번이 1~9번으로 한 칸씩 위로 당겨짐
+   *   - 아래 → 위 (예: 12번 → 10번): 10~11번이 11~12번으로 한 칸씩 아래로 밀림
+   */
   function moveTo(currentIndex: number, newPosition1Based: number) {
+    const productId = selectedIds[currentIndex];
+    const product = productMap.get(productId);
     setSelectedIds((prev) => {
       const target =
         Math.max(1, Math.min(prev.length, newPosition1Based)) - 1;
@@ -169,6 +180,17 @@ export default function EditCollectionPage({
       next.splice(target, 0, item);
       return next;
     });
+    if (productId && product) {
+      const clamped = Math.max(
+        1,
+        Math.min(selectedIds.length, newPosition1Based),
+      );
+      toast.success(`${product.name} → ${clamped}번 자리로 이동`);
+      setRecentlyMovedId(productId);
+      window.setTimeout(() => {
+        setRecentlyMovedId((curr) => (curr === productId ? null : curr));
+      }, 1500);
+    }
   }
 
   async function handleSave() {
@@ -352,10 +374,14 @@ export default function EditCollectionPage({
                 <ul className="divide-y">
                   {selectedProducts.map((p, idx) => {
                     const shoppable = isShoppableProduct(p);
+                    const moved = p.id === recentlyMovedId;
                     return (
                       <li
                         key={p.id}
-                        className="flex items-center gap-3 px-4 py-2"
+                        className={cn(
+                          "flex items-center gap-3 px-4 py-2 transition-colors duration-300",
+                          moved && "bg-brand-mint/40",
+                        )}
                       >
                         <Input
                           key={`pos-${p.id}-${idx}`}
