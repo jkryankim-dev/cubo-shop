@@ -101,6 +101,29 @@ export async function createPendingOrderAction(
     depositAccount: ShopOrderDepositAccount;
   }>
 > {
+  try {
+    return await createPendingOrderImpl(input);
+  } catch (err) {
+    // server-side throw 를 그대로 노출하면 production 빌드에서
+    // "An error occurred in the Server Components render. ..." 형태의
+    // cryptic 메시지가 client toast 에 그대로 박힘. friendly 메시지로 변환.
+    console.error("[checkout] createPendingOrderAction", err);
+    const msg =
+      err instanceof Error ? err.message : "주문 처리 중 오류가 발생했습니다.";
+    return { success: false, message: msg };
+  }
+}
+
+async function createPendingOrderImpl(
+  input: CreatePendingOrderInput,
+): Promise<
+  ActionResult<{
+    orderId: string;
+    amount: number;
+    orderName: string;
+    depositAccount: ShopOrderDepositAccount;
+  }>
+> {
   const uid = await verifyAuth(input.idToken);
   if (!uid) return { success: false, message: "로그인이 필요합니다." };
 
@@ -126,10 +149,16 @@ export async function createPendingOrderAction(
     phone?: string;
     email?: string;
     businessLicense?: { status?: "pending" | "approved" | "rejected" };
+    erpEntityId?: string;
   };
+  // 결제 자격: 사업자 등급 + (사업자등록증 승인 OR ERP 비가맹 마이그레이션 회원)
+  // auth-provider 의 approvedBusiness 조건과 일치.
+  const hasApprovedLicense =
+    customer.businessLicense?.status === "approved";
+  const isMigratedFromErp = !!customer.erpEntityId;
   if (
     customer.grade !== "business" ||
-    customer.businessLicense?.status !== "approved"
+    (!hasApprovedLicense && !isMigratedFromErp)
   ) {
     return {
       success: false,
