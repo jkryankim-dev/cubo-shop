@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  AlertOctagon,
   AlertTriangle,
   Bell,
   Boxes,
@@ -66,6 +67,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     title: "기타",
     items: [
       { href: "/admin/notifications", label: "알림톡 발송", icon: Bell },
+      { href: "/admin/error-logs", label: "오류 로그", icon: AlertOctagon },
       { href: "/admin/admins", label: "관리자 관리", icon: UserCog },
       { href: "/admin/settings", label: "사이트 설정", icon: Settings },
     ],

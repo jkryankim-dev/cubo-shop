@@ -107,6 +107,14 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // -------- shop_error_logs/{id} --------
+    // 전역 오류 수집. /admin/error-logs 에서 관리자가 조회.
+    // 쓰기는 Admin SDK (server action / api route) 만.
+    match /shop_error_logs/{id} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
     // 그 외 cubo-shop 이 직접 다루지 않는 컬렉션은 ERP 룰에 의해 결정됨.
     // 이 파일에서 별도 default 매처를 두지 않음 (ERP 룰과 병합 시 충돌 방지).
   }

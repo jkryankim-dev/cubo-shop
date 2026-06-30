@@ -3,6 +3,8 @@
 import * as Sentry from "@sentry/nextjs";
 import { useEffect } from "react";
 
+import { logClientError } from "@/lib/log-client-error";
+
 export default function GlobalError({
   error,
   reset,
@@ -14,6 +16,13 @@ export default function GlobalError({
     if (process.env.NEXT_PUBLIC_SENTRY_DSN) {
       Sentry.captureException(error);
     }
+    logClientError({
+      source: "global",
+      message: error.message || "(no message)",
+      stack: error.stack,
+      digest: error.digest,
+      context: "app/global-error.tsx",
+    });
   }, [error]);
 
   return (

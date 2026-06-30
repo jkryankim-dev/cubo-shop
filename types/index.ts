@@ -366,3 +366,37 @@ export interface ShopSalesLink {
   visits?: number;
   signups?: number;
 }
+
+// ---------------------------------------------------------------------
+// ShopErrorLog — 쿠보몰 전역 오류 수집
+// 컬렉션: shop_error_logs/{id}
+//
+// 수집 진입점:
+//   - server: lib/error-logger.ts:logServerError (server actions catch)
+//   - client: lib/log-client-error.ts → /api/log-error (window.onerror,
+//     unhandledrejection, global-error.tsx)
+//
+// 관리자 페이지 /admin/error-logs 에서 최근순으로 조회.
+// ---------------------------------------------------------------------
+export interface ShopErrorLog {
+  id: string;
+  timestamp?: Timestamp;
+  /** 발생 위치 — server action / api route / 브라우저 / Next.js global error */
+  source: "server" | "client" | "global";
+  level: "error" | "warn";
+  /** 오류 메시지 (최대 2000자) */
+  message: string;
+  /** 스택 트레이스 (최대 5000자) */
+  stack?: string;
+  /** Next.js 가 production 빌드에서 부여하는 익명 식별자 */
+  digest?: string;
+  /** client/global 에러 발생 시점 URL */
+  url?: string;
+  userAgent?: string;
+  /** 로그인된 사용자 uid (있으면) */
+  userUid?: string;
+  /** 발생 컨텍스트 — server action 이름, route 경로 등 */
+  context?: string;
+  /** 임의 추가 정보 */
+  extra?: Record<string, unknown>;
+}

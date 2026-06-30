@@ -19,6 +19,7 @@ import {
   sendCancelledAlimtalk,
   sendPaymentConfirmedAlimtalk,
 } from "@/lib/alimtalk";
+import { logServerError } from "@/lib/error-logger";
 import { getBundleUnit, getDisplayPrice } from "@/lib/visibility";
 import type {
   Product,
@@ -108,6 +109,11 @@ export async function createPendingOrderAction(
     // "An error occurred in the Server Components render. ..." 형태의
     // cryptic 메시지가 client toast 에 그대로 박힘. friendly 메시지로 변환.
     console.error("[checkout] createPendingOrderAction", err);
+    void logServerError({
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+      context: "createPendingOrderAction",
+    });
     const msg =
       err instanceof Error ? err.message : "주문 처리 중 오류가 발생했습니다.";
     return { success: false, message: msg };

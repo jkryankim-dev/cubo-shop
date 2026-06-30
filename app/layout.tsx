@@ -7,6 +7,7 @@ import "./globals.css";
 import { Analytics } from "@/components/shop/analytics";
 import { AuthProvider } from "@/components/auth/auth-provider";
 import { ConsentModal } from "@/components/auth/consent-modal";
+import { ClientErrorListener } from "@/components/client-error-listener";
 import { SalesRefBootstrap } from "@/components/sales-ref-bootstrap";
 
 const geistSans = Geist({
@@ -86,6 +87,7 @@ export default function RootLayout({
             <Suspense fallback={null}>
               <SalesRefBootstrap />
             </Suspense>
+            <ClientErrorListener />
             {children}
             <ConsentModal />
           </AuthProvider>

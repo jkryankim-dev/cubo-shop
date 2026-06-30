@@ -21,6 +21,8 @@ import { createHash } from "node:crypto";
 import { adminAuth, adminDb } from "@/lib/firebaseAdmin";
 import { FieldValue } from "firebase-admin/firestore";
 
+import { logServerError } from "@/lib/error-logger";
+
 interface LoginResult {
   success: boolean;
   message: string;
@@ -182,6 +184,26 @@ async function migrateErpUser(uid: string, user: ErpUser): Promise<void> {
 }
 
 export async function erpLoginAction(input: {
+  loginId: string;
+  password: string;
+}): Promise<LoginResult> {
+  try {
+    return await erpLoginImpl(input);
+  } catch (err) {
+    console.error("[erp-login] 처리 실패", err);
+    void logServerError({
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+      context: "erpLoginAction",
+    });
+    return {
+      success: false,
+      message: "로그인 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
+    };
+  }
+}
+
+async function erpLoginImpl(input: {
   loginId: string;
   password: string;
 }): Promise<LoginResult> {
