@@ -265,6 +265,11 @@ export interface ShopOrder {
   manuallyPaidBy?: string;
   /** 취소 사유 (auto-expired / manual / payment-fail 등) */
   cancelReason?: string;
+  /**
+   * 주문시각 — ERP 미러링용 (ms epoch number, ERP 의 createdAt 관례와 동일).
+   * createdAt(Firestore Timestamp) 과 같은 시각이지만 타입이 다름.
+   */
+  orderedAt?: number;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 }

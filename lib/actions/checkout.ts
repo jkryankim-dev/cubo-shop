@@ -251,7 +251,8 @@ async function createPendingOrderImpl(
       });
     }
 
-    const expiresAt = Timestamp.fromMillis(Date.now() + PAYMENT_HOLD_MS);
+    const now = Date.now();
+    const expiresAt = Timestamp.fromMillis(now + PAYMENT_HOLD_MS);
 
     tx.set(adminDb().collection("shop_orders").doc(orderId), {
       id: orderId,
@@ -270,6 +271,8 @@ async function createPendingOrderImpl(
       depositAccount,
       shippingAddress: input.shippingAddress,
       expiresAt,
+      // ERP 미러링용 주문시각 — ERP 관례 (ms epoch number). createdAt(Timestamp) 과 별개.
+      orderedAt: now,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
