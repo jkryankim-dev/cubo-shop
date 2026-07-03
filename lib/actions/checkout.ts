@@ -196,15 +196,34 @@ async function createPendingOrderImpl(
   const orderId = adminDb().collection("shop_orders").doc().id;
 
   const txResult = await adminDb().runTransaction(async (tx) => {
-    let totalAmount = 0;
-    const orderItems: ShopOrder["items"] = [];
+    // ⚠️ Firestore 트랜잭션은 "모든 읽기 → 모든 쓰기" 순서 강제.
+    // 상품별로 읽기·쓰기를 섞으면 두 번째 상품 읽기에서 즉시 실패하므로
+    // 1단계에서 전 품목을 읽고, 2단계에서 검증·쓰기를 몰아서 수행한다.
 
+    // ---- 1단계: 읽기 전부 ----
     for (const it of input.items) {
       if (it.quantity <= 0) {
         throw new Error("수량이 0 이하인 항목이 있습니다.");
       }
-      const productRef = adminDb().collection("products").doc(it.productId);
-      const productSnap = await tx.get(productRef);
+    }
+    const productRefs = input.items.map((it) =>
+      adminDb().collection("products").doc(it.productId),
+    );
+    const safetyRefs = input.items.map((it) =>
+      adminDb().collection("shop_safety_stocks").doc(it.productId),
+    );
+    const [productSnaps, safetySnaps] = await Promise.all([
+      tx.getAll(...productRefs),
+      tx.getAll(...safetyRefs),
+    ]);
+
+    // ---- 2단계: 검증 + 쓰기 전부 ----
+    let totalAmount = 0;
+    const orderItems: ShopOrder["items"] = [];
+
+    for (let i = 0; i < input.items.length; i++) {
+      const it = input.items[i];
+      const productSnap = productSnaps[i];
       if (!productSnap.exists) {
         throw new Error(`존재하지 않는 상품: ${it.productId}`);
       }
@@ -215,10 +234,7 @@ async function createPendingOrderImpl(
       if (!product.tags?.includes("ON")) {
         throw new Error(`현재 판매하지 않는 상품: ${product.name ?? it.productId}`);
       }
-      // 안전재고 fetch 후 effective stock 검증
-      const safetySnap = await tx.get(
-        adminDb().collection("shop_safety_stocks").doc(it.productId),
-      );
+      const safetySnap = safetySnaps[i];
       const safetyStock = safetySnap.exists
         ? ((safetySnap.data()?.threshold as number | undefined) ?? 0)
         : 0;
@@ -235,7 +251,7 @@ async function createPendingOrderImpl(
           `${product.name} 은 ${bundleUnit}개 단위로 구매해야 합니다 (요청 ${it.quantity})`,
         );
       }
-      tx.update(productRef, {
+      tx.update(productRefs[i], {
         stock: FieldValue.increment(-it.quantity),
       });
       const unitPrice = getDisplayPrice(product);
