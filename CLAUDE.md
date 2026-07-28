@@ -90,7 +90,7 @@ cuboerp 와 **동일한 Firebase 프로젝트** 를 공유합니다.
 - cubo-shop 의 `shop_orders` 가 단일 진실. cuboerp 가 onSnapshot 으로 read.
 - cuboerp 의 주문 관리 화면 표시명: **"쿠보몰 (주문자 상호명)"**
 - cubo-shop 은 ERP 의 `orders` 컬렉션을 직접 쓰지 않음 (cuboerp 가 자기 시스템에 미러링)
-- 결제 확정 시 webhook (`ERP_SYNC_URL`) 한 번 호출 — cron 폴링 X
+- 결제 대기(pending) 시 webhook (`ERP_SYNC_URL`) 한 번 호출 — cron 폴링 X
 
 ## ERP 연계성 — 항상 우선 고려 (필독)
 

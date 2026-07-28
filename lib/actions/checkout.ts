@@ -319,6 +319,17 @@ async function createPendingOrderImpl(
     console.warn("[alimtalk] bank-transfer-requested 발송 실패", err),
   );
 
+  // ERP 전송용 타이틀 (구매자명(상호명)_주문일자 및 시간)
+  const orderTime = new Date();
+  const dateStr = `${orderTime.getFullYear()}-${String(orderTime.getMonth() + 1).padStart(2, "0")}-${String(orderTime.getDate()).padStart(2, "0")} ${String(orderTime.getHours()).padStart(2, "0")}:${String(orderTime.getMinutes()).padStart(2, "0")}`;
+  const companyStr = customer?.companyName ? `(${customer.companyName})` : (customer?.grade === "business" ? `(${customer.name})` : "");
+  const erpTitle = `${buyerName}${companyStr}_${dateStr}`;
+
+  // 무통장입금(pending) 상태일 때 ERP로 즉시 전송
+  await notifyErpOrderSync("order-created", orderId, erpTitle).catch((err) =>
+    console.warn("[erp-sync] order-created 호출 실패", err),
+  );
+
   return {
     success: true,
     message: "주문이 접수되었습니다. 안내된 계좌로 입금해주세요.",
@@ -337,13 +348,14 @@ async function createPendingOrderImpl(
  * 호출 실패해도 결제 결과에는 영향이 없도록 try/catch 처리.
  *
  * trigger 종류:
- *   - "payment-confirm"  : 무통장 입금 확인 (pending → paid)
+ *   - "order-created"    : 주문 생성 (pending) 시 즉시 전송
  *   - "shipped"          : 송장 입력·발송 처리 (preparing → shipped)
  *                          → ERP 가 이 시점에 전자세금계산서 발행하도록 합의됨
  */
 async function notifyErpOrderSync(
-  trigger: "payment-confirm" | "shipped",
+  trigger: "order-created" | "shipped",
   orderId: string,
+  erpTitle?: string,
 ): Promise<void> {
   const url = process.env.ERP_SYNC_URL;
   const secret = process.env.ERP_SYNC_SECRET;
@@ -354,7 +366,7 @@ async function notifyErpOrderSync(
       Authorization: `Bearer ${secret}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ source: "cubo-shop", trigger, orderId }),
+    body: JSON.stringify({ source: "cubo-shop", trigger, orderId, erpTitle }),
     signal: AbortSignal.timeout(5000),
   });
 }
@@ -555,9 +567,6 @@ export async function manuallyMarkPaidAction(
     paymentMethod: "BANK_TRANSFER",
   }).catch((err) =>
     console.warn("[alimtalk] manual paid 발송 실패", err),
-  );
-  await notifyErpOrderSync("payment-confirm", orderId).catch((err) =>
-    console.warn("[erp-sync] 호출 실패", err),
   );
 
   return { success: true, message: "입금 확인 처리되었습니다." };
