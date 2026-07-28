@@ -534,40 +534,4 @@ export async function adminUpdateOrderAction(
   return { success: true, message: "주문이 갱신되었습니다." };
 }
 
-export async function manuallyMarkPaidAction(
-  idToken: string,
-  orderId: string,
-): Promise<ActionResult> {
-  const adminUid = await verifyAdmin(idToken);
-  if (!adminUid)
-    return { success: false, message: "관리자 권한이 필요합니다." };
 
-  const orderRef = adminDb().collection("shop_orders").doc(orderId);
-  const orderSnap = await orderRef.get();
-  if (!orderSnap.exists) return { success: false, message: "주문 없음" };
-  const order = orderSnap.data() as ShopOrder;
-  if (order.status !== "pending") {
-    return {
-      success: false,
-      message: `현재 상태(${order.status})에서 입금 마킹 불가`,
-    };
-  }
-
-  await orderRef.update({
-    status: "paid",
-    manuallyPaidBy: adminUid,
-    paymentMethod: "BANK_TRANSFER",
-    updatedAt: FieldValue.serverTimestamp(),
-  });
-
-  await sendPaymentConfirmedAlimtalk({
-    ...order,
-    status: "paid",
-    manuallyPaidBy: adminUid,
-    paymentMethod: "BANK_TRANSFER",
-  }).catch((err) =>
-    console.warn("[alimtalk] manual paid 발송 실패", err),
-  );
-
-  return { success: true, message: "입금 확인 처리되었습니다." };
-}

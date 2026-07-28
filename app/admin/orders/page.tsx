@@ -12,7 +12,6 @@ import { useAuth } from "@/components/auth/auth-provider";
 import { listAllOrders } from "@/lib/admin";
 import {
   cleanupExpiredOrdersAction,
-  manuallyMarkPaidAction,
 } from "@/lib/actions/checkout";
 import { formatPriceKRW } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -63,7 +62,6 @@ export default function AdminOrdersPage() {
   const [filter, setFilter] = useState("");
   const [status, setStatus] = useState<ShopOrderStatus | "all">("all");
   const [now, setNow] = useState(Date.now());
-  const [markingUid, setMarkingUid] = useState<string | null>(null);
 
   // 페이지 진입 시 한 번 만료 정리 → 그 후 목록 로드
   useEffect(() => {
@@ -108,35 +106,11 @@ export default function AdminOrdersPage() {
     });
   }, [orders, filter, status]);
 
-  async function handleMarkPaid(orderId: string) {
-    if (!user) return;
-    if (!window.confirm(`주문 ${orderId.slice(0, 12)} 을 입금 완료로 처리할까요?`))
-      return;
-    setMarkingUid(orderId);
-    try {
-      const idToken = await user.getIdToken();
-      const result = await manuallyMarkPaidAction(idToken, orderId);
-      if (result.success) {
-        toast.success(result.message);
-        setOrders((prev) =>
-          prev.map((o) => (o.id === orderId ? { ...o, status: "paid" } : o)),
-        );
-      } else {
-        toast.error(result.message);
-      }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "처리 실패");
-    } finally {
-      setMarkingUid(null);
-    }
-  }
-
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
       <h1 className="text-2xl font-bold tracking-tight">주문 관리</h1>
       <p className="mt-1 text-sm text-muted-foreground">
-        결제 대기 주문은 6시간 이후 자동 취소됩니다. 무통장 입금은 수동으로 결제
-        완료 처리할 수 있어요.
+        결제 대기 주문은 6시간 이후 자동 취소됩니다. 주문 상태 관리는 ERP에서 통합적으로 수행합니다.
       </p>
 
       <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -194,7 +168,6 @@ export default function AdminOrdersPage() {
                     <th className="py-3 pr-2">상품</th>
                     <th className="py-3 pr-2">금액</th>
                     <th className="py-3 pr-2">입금/송장</th>
-                    <th className="py-3 pr-4 text-right">처리</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -254,20 +227,6 @@ export default function AdminOrdersPage() {
                             </span>
                           ) : (
                             <span className="text-muted-foreground">—</span>
-                          )}
-                        </td>
-                        <td className="py-3 pr-4 text-right">
-                          {isPending && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              disabled={markingUid === o.id}
-                              onClick={() => handleMarkPaid(o.id)}
-                            >
-                              {markingUid === o.id
-                                ? "처리 중…"
-                                : "입금 완료 처리"}
-                            </Button>
                           )}
                         </td>
                       </tr>
