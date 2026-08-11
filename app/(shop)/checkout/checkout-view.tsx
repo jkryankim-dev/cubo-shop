@@ -273,7 +273,7 @@ export default function CheckoutView() {
     <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
       <h1 className="text-3xl font-bold tracking-tight">주문서 작성</h1>
       <p className="mt-1 text-sm text-muted-foreground">
-        주문 접수 후 6시간 이내 입금 완료되지 않으면 자동 취소됩니다.
+        주문 접수 후 안내된 계좌로 입금해주시면 확인 즉시 출고 준비됩니다.
       </p>
 
       <div className="mt-6 space-y-6">
@@ -439,8 +439,7 @@ export default function CheckoutView() {
                   </p>
                 )}
                 <p className="text-xs text-muted-foreground">
-                  주문 접수 후 위 계좌로 <strong>6시간 이내</strong> 입금해주세요.
-                  입금 확인 후 출고됩니다. 미입금 시 자동 취소됩니다.
+                  주문 접수 후 위 계좌로 입금해주세요. 입금 확인 후 출고됩니다.
                 </p>
               </>
             ) : (

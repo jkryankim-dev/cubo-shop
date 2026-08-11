@@ -6,14 +6,23 @@
 // 흐름:
 //   1) createPendingOrderAction: 사업자 승인 회원만, 재고 차감 + 주문 생성
 //      → status="pending", paymentMethod="BANK_TRANSFER", 회사 계좌 스냅샷 박음
+//      → 즉시 ERP webhook 호출 → ERP 에 "접수대기" 로 미러링
 //   2) 고객이 회사 법인계좌로 입금
-//   3) manuallyMarkPaidAction: 관리자가 입금 확인 후 status=paid 마킹
-//   4) cancelMyPendingOrderAction / cleanupExpiredOrdersAction: 재고 복원 + cancelled
-//   5) adminUpdateOrderAction: 송장 입력·발송 처리 + 알림톡
+//   3) adminUpdateOrderAction: 관리자가 /admin/orders/{id} 상태 드롭다운에서
+//      입금확인(→paid)·발송(→shipped) 처리 + 알림톡 + ERP webhook
+//   4) cancelMyPendingOrderAction: 고객이 직접 취소 시 재고 복원 + cancelled
+//
+// ⚠️ 2026-08: 입금 대기 6시간 자동취소 폐지.
+//    pending 은 "결제 대기" 가 아니라 "주문 접수" 를 뜻하며, ERP 가 이를 접수대기로
+//    미러링한다. 시간 경과로 상태를 자동 변경하면 ERP 와 재고가 어긋나므로
+//    절대 되살리지 말 것.
+//
+// ⚠️ 상태를 바꾸는 코드를 새로 추가하면 notifyErpOrderSync 호출도 반드시 같이 붙일 것.
+//    ERP 엔 폴링이 없어 이 webhook 이 유일한 트리거다 (2026-08-11 사고).
 // =====================================================================
 
 import { adminAuth, adminDb } from "@/lib/firebaseAdmin";
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { FieldValue } from "firebase-admin/firestore";
 import {
   sendBankTransferRequestedAlimtalk,
   sendCancelledAlimtalk,
@@ -28,8 +37,6 @@ import type {
   ShopOrder,
   ShopOrderDepositAccount,
 } from "@/types";
-
-const PAYMENT_HOLD_MS = 6 * 60 * 60 * 1000; // 6시간
 
 interface ActionResult<T = unknown> {
   success: boolean;
@@ -268,7 +275,6 @@ async function createPendingOrderImpl(
     }
 
     const now = Date.now();
-    const expiresAt = Timestamp.fromMillis(now + PAYMENT_HOLD_MS);
 
     tx.set(adminDb().collection("shop_orders").doc(orderId), {
       id: orderId,
@@ -286,7 +292,6 @@ async function createPendingOrderImpl(
       paymentMethod: "BANK_TRANSFER",
       depositAccount,
       shippingAddress: input.shippingAddress,
-      expiresAt,
       // ERP 미러링용 주문시각 — ERP 관례 (ms epoch number). createdAt(Timestamp) 과 별개.
       orderedAt: now,
       createdAt: FieldValue.serverTimestamp(),
@@ -345,15 +350,28 @@ async function createPendingOrderImpl(
 /**
  * ERP 의 shop-orders sync 엔드포인트 호출 (best-effort).
  * cubo-shop → ERP 자동 반영의 단일 진입점입니다.
- * 호출 실패해도 결제 결과에는 영향이 없도록 try/catch 처리.
+ * 호출 실패해도 주문 처리 결과에는 영향이 없도록 catch 처리.
+ *
+ * ⚠️ ERP 는 payload 의 trigger 를 분기에 쓰지 않고 `shop_orders` 를 status 로 전수
+ *    재스캔한다 (cuboerp/app/api/shop-orders/sync/route.ts). 즉 **신호를 한 번 보내는
+ *    것 자체가 동기화** 이며, 멱등이다. 따라서 상태가 바뀌면 종류를 가리지 말고 부를 것.
+ *    trigger 는 ERP 로그 판독용 라벨이다.
  *
  * trigger 종류:
- *   - "order-created"    : 주문 생성 (pending) 시 즉시 전송
- *   - "shipped"          : 송장 입력·발송 처리 (preparing → shipped)
+ *   - "order-created"    : 주문 생성 (pending) 시 즉시 전송 → ERP 접수대기로 미러링
+ *   - "payment-confirm"  : 입금 확인 (→ paid) — ERP 가 CONFIRMED 로 올리는 신호
+ *   - "shipped"          : 송장 입력·발송 처리 (→ shipped)
  *                          → ERP 가 이 시점에 전자세금계산서 발행하도록 합의됨
+ *   - "status-changed"   : 그 외 상태 전환 (preparing/delivered/cancelled/refunded)
  */
+type ErpSyncTrigger =
+  | "order-created"
+  | "payment-confirm"
+  | "shipped"
+  | "status-changed";
+
 async function notifyErpOrderSync(
-  trigger: "order-created" | "shipped",
+  trigger: ErpSyncTrigger,
   orderId: string,
   erpTitle?: string,
 ): Promise<void> {
@@ -404,6 +422,11 @@ async function cancelOrderInternal(
     await sendCancelledAlimtalk(cancelled, reason).catch((err) =>
       console.warn("[alimtalk] cancelled 발송 실패", err),
     );
+    // 취소도 ERP 에 알린다 — 안 보내면 ERP 는 접수대기로 들고 있는데
+    // 쿠보몰은 이미 재고를 복원한 상태로 어긋난다.
+    await notifyErpOrderSync("status-changed", orderId).catch((err) =>
+      console.warn("[erp-sync] cancelled 호출 실패", err),
+    );
   }
 }
 
@@ -435,35 +458,7 @@ export async function cancelMyPendingOrderAction(
 }
 
 // ---------------------------------------------------------------------
-// 3) 6시간 경과 pending 자동 정리
-// ---------------------------------------------------------------------
-export async function cleanupExpiredOrdersAction(): Promise<
-  ActionResult<{ cleaned: number }>
-> {
-  const now = Timestamp.now();
-  const snap = await adminDb()
-    .collection("shop_orders")
-    .where("status", "==", "pending")
-    .where("expiresAt", "<", now)
-    .get();
-  let cleaned = 0;
-  for (const doc of snap.docs) {
-    try {
-      await cancelOrderInternal(doc.id, "auto-expired");
-      cleaned += 1;
-    } catch (err) {
-      console.warn("[cleanup-expired]", doc.id, err);
-    }
-  }
-  return {
-    success: true,
-    message: `${cleaned}건 만료 처리`,
-    data: { cleaned },
-  };
-}
-
-// ---------------------------------------------------------------------
-// 4) 관리자 — 주문 상태/송장 변경 + 알림톡 자동 발송
+// 3) 관리자 — 주문 상태/송장 변경 + 알림톡 자동 발송
 // ---------------------------------------------------------------------
 export interface AdminUpdateOrderInput {
   idToken: string;
@@ -523,11 +518,19 @@ export async function adminUpdateOrderAction(
     console.warn("[alimtalk] status-transition 발송 실패", err);
   }
 
-  // shipped 전환 시 ERP webhook 한 번 더 호출 → ERP 가 전자세금계산서 발행 트리거.
-  // 송장 추가 (재발송) 만 한 경우는 status 변동 없으므로 webhook 안 보냄.
-  if (before.status !== "shipped" && after.status === "shipped") {
-    await notifyErpOrderSync("shipped", input.orderId).catch((err) =>
-      console.warn("[erp-sync] shipped 호출 실패", err),
+  // 상태가 바뀌면 종류를 가리지 않고 ERP 에 신호를 보낸다.
+  // 2026-08-11 사고: 입금확인(→paid)이 여기서 ERP 로 안 나가, 관리자가 매번 ERP 에서
+  // 수동 동기화를 눌러야 했음. shipped 만 보내던 조건을 전체 전환으로 넓힘.
+  // 송장만 수정한 경우(재발송)는 status 변동이 없으므로 보내지 않는다.
+  if (before.status !== after.status) {
+    const trigger: ErpSyncTrigger =
+      after.status === "paid"
+        ? "payment-confirm"
+        : after.status === "shipped"
+          ? "shipped"
+          : "status-changed";
+    await notifyErpOrderSync(trigger, input.orderId).catch((err) =>
+      console.warn(`[erp-sync] ${trigger} 호출 실패`, err),
     );
   }
 

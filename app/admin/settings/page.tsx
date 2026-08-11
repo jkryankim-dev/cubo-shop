@@ -143,7 +143,7 @@ export default function AdminSettingsPage() {
                   value={noticeText}
                   onChange={(e) => setNoticeText(e.target.value)}
                   rows={2}
-                  placeholder="예: 입금자명에 주문자명을 적어주세요. 미입금 시 6시간 후 자동 취소됩니다."
+                  placeholder="예: 입금자명에 주문자명(또는 상호명)을 적어주세요."
                 />
               </div>
               <Button type="submit" disabled={savingPay}>

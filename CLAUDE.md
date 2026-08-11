@@ -82,15 +82,25 @@ cuboerp 와 **동일한 Firebase 프로젝트** 를 공유합니다.
 
 ## 주문·결제 정책
 - **재고 차감 시점**: 주문 생성 시 (status=pending) 트랜잭션으로 즉시 차감 (홀드)
-- **입금 대기**: pending 상태로 **6시간** 동안 유효, 경과 시 자동 cancelled + 재고 복원
+- **`pending` 의 의미 = "주문 접수"** (PG 결제 대기 X). 쿠보몰 화면 라벨도 "주문 접수".
+- **시간 경과로 상태를 자동 변경하지 말 것** — 2026-08 에 6시간 미입금 자동취소를 폐지했다.
+  (`cleanupExpiredOrdersAction` 삭제, `expiresAt` 기록 중단.) 되살리면 ERP 의 접수대기 주문과
+  재고가 어긋난다.
 - **상태 흐름**: `pending` → `paid` → `preparing` → `shipped` → `delivered` (또는 `cancelled` / `refunded`)
-- **paid 마킹**: 관리자가 입금 확인 후 `/admin/orders` 또는 `/admin/payments` 에서 수동 마킹
+- **paid 마킹**: 관리자가 입금 확인 후 **`/admin/orders/{id}` 주문 상세의 상태 드롭다운** 에서 변경.
+  (`/admin/payments` 는 집계 전용 — 2026-07 에 마킹 버튼 제거됨)
+- **고객 취소**: 마이페이지에서 `pending` 주문 직접 취소 가능 → 재고 복원 + `cancelled`
 
 ## ERP 동기화
 - cubo-shop 의 `shop_orders` 가 단일 진실. cuboerp 가 onSnapshot 으로 read.
 - cuboerp 의 주문 관리 화면 표시명: **"쿠보몰 (주문자 상호명)"**
 - cubo-shop 은 ERP 의 `orders` 컬렉션을 직접 쓰지 않음 (cuboerp 가 자기 시스템에 미러링)
-- 결제 대기(pending) 시 webhook (`ERP_SYNC_URL`) 한 번 호출 — cron 폴링 X
+- **주문 생성 시 + 상태가 바뀔 때마다** webhook (`ERP_SYNC_URL`) 호출 — cron 폴링 X.
+  ERP 쪽엔 폴링이 없어서 **이 호출이 유일한 트리거** 다. 빠뜨리면 관리자가 ERP 에서
+  수동 동기화 버튼을 눌러야 한다 (2026-08-11 실제 사고).
+- ERP 는 payload 의 `trigger` 로 분기하지 않고 `shop_orders` 를 전수 재스캔한다 (멱등).
+  → **신호를 보내는 것 자체가 동기화.** 새 상태 전환을 추가하면 webhook 호출도 같이 붙일 것.
+- ERP 는 `pending` 주문을 **접수대기(PENDING)** 로 미러링한다 (2026-08-11~).
 
 ## ERP 연계성 — 항상 우선 고려 (필독)
 

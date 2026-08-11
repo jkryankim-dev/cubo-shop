@@ -19,7 +19,7 @@ import { formatPriceKRW } from "@/lib/format";
 import type { ShopOrder, ShopOrderStatus } from "@/types";
 
 const STATUSES: { value: ShopOrderStatus; label: string }[] = [
-  { value: "pending", label: "결제 대기" },
+  { value: "pending", label: "주문 접수" },
   { value: "paid", label: "결제 완료" },
   { value: "preparing", label: "배송 준비" },
   { value: "shipped", label: "배송 중" },

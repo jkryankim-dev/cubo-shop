@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
 import type { ShopOrder, ShopOrderStatus } from "@/types";
 
 const STATUS_LABEL: Record<ShopOrderStatus, string> = {
-  pending: "결제 대기",
+  pending: "주문 접수",
   paid: "결제 완료",
   preparing: "배송 준비",
   shipped: "배송 중",
@@ -41,18 +41,10 @@ const STATUS_COLOR: Record<ShopOrderStatus, string> = {
   refunded: "bg-destructive/15 text-destructive",
 };
 
-function formatRemaining(ms: number): string {
-  if (ms <= 0) return "만료됨";
-  const h = Math.floor(ms / 3600_000);
-  const m = Math.floor((ms % 3600_000) / 60_000);
-  return `${h}시간 ${m}분 남음`;
-}
-
 export default function MypageOrdersPage() {
   const { user } = useAuth();
   const [orders, setOrders] = useState<ShopOrder[]>([]);
   const [loading, setLoading] = useState(true);
-  const [now, setNow] = useState(Date.now());
   const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -83,11 +75,6 @@ export default function MypageOrdersPage() {
       cancelled = true;
     };
   }, [user]);
-
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 60_000);
-    return () => clearInterval(t);
-  }, []);
 
   const visibleOrders = useMemo(() => orders, [orders]);
 
@@ -153,7 +140,6 @@ export default function MypageOrdersPage() {
   return (
     <div className="space-y-3">
       {visibleOrders.map((o) => {
-        const expiresMs = o.expiresAt ? o.expiresAt.toMillis() - now : 0;
         const isPending = o.status === "pending";
         return (
           <Card key={o.id}>
@@ -173,15 +159,8 @@ export default function MypageOrdersPage() {
                       {STATUS_LABEL[o.status]}
                     </span>
                     {isPending && (
-                      <span
-                        className={cn(
-                          "ml-2 text-xs",
-                          expiresMs < 60 * 60_000
-                            ? "text-destructive"
-                            : "text-muted-foreground",
-                        )}
-                      >
-                        {formatRemaining(expiresMs)}
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        입금 확인 중
                       </span>
                     )}
                   </p>

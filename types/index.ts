@@ -259,11 +259,11 @@ export interface ShopOrder {
   paymentId?: string;
   /** @deprecated 토스 가상계좌 흐름은 폐기됨. 기존 주문 호환용으로만 유지. */
   virtualAccount?: ShopOrderVirtualAccount;
-  /** 입금대기 만료 시각 (createdAt + 6시간). 경과 시 자동 cancelled */
+  /** @deprecated 2026-08 입금대기 6시간 자동취소 폐지. 그 이전 주문에만 남아있는 필드. */
   expiresAt?: Timestamp;
   /** 무통장입금 수동 입금 마킹 시 (관리자 uid) */
   manuallyPaidBy?: string;
-  /** 취소 사유 (auto-expired / manual / payment-fail 등) */
+  /** 취소 사유 (user-cancel / manual 등) */
   cancelReason?: string;
   /**
    * 주문시각 — ERP 미러링용 (ms epoch number, ERP 의 createdAt 관례와 동일).

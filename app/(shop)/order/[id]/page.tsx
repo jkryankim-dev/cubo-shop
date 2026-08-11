@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 import type { ShopOrder, ShopOrderStatus } from "@/types";
 
 const STATUS_LABEL: Record<ShopOrderStatus, string> = {
-  pending: "결제 대기",
+  pending: "주문 접수",
   paid: "결제 완료",
   preparing: "배송 준비",
   shipped: "배송 중",
@@ -37,13 +37,6 @@ const STATUS_COLOR: Record<ShopOrderStatus, string> = {
   cancelled: "bg-destructive/15 text-destructive",
   refunded: "bg-destructive/15 text-destructive",
 };
-
-function formatRemaining(ms: number): string {
-  if (ms <= 0) return "만료됨";
-  const h = Math.floor(ms / 3600_000);
-  const m = Math.floor((ms % 3600_000) / 60_000);
-  return `${h}시간 ${m}분 남음`;
-}
 
 export default function OrderDetailPage({
   params,
@@ -66,7 +59,6 @@ function OrderDetailInner({
   const { user } = useAuth();
   const [order, setOrder] = useState<ShopOrder | null>(null);
   const [loading, setLoading] = useState(true);
-  const [now, setNow] = useState(Date.now());
   const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
@@ -93,11 +85,6 @@ function OrderDetailInner({
       cancelled = true;
     };
   }, [id, user]);
-
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 60_000);
-    return () => clearInterval(t);
-  }, []);
 
   async function handleCancel() {
     if (!user || !order) return;
@@ -142,7 +129,6 @@ function OrderDetailInner({
     );
   }
 
-  const expiresMs = order.expiresAt ? order.expiresAt.toMillis() - now : 0;
   const isPending = order.status === "pending";
   const trackingUrl = order.trackingNumber
     ? `https://search.naver.com/search.naver?query=${encodeURIComponent(`${order.carrier ?? ""} ${order.trackingNumber} 송장조회`)}`
@@ -174,16 +160,7 @@ function OrderDetailInner({
           )}
         >
           {STATUS_LABEL[order.status]}
-          {isPending && (
-            <span
-              className={cn(
-                "ml-2",
-                expiresMs < 60 * 60_000 ? "text-destructive" : "",
-              )}
-            >
-              · {formatRemaining(expiresMs)}
-            </span>
-          )}
+          {isPending && <span className="ml-2">· 입금 확인 중</span>}
         </span>
       </div>
 
@@ -307,7 +284,7 @@ function OrderDetailInner({
                   예금주: {order.depositAccount.accountHolder}
                 </p>
                 <p className="mt-2 text-muted-foreground">
-                  위 계좌로 6시간 이내 입금해주세요. 미입금 시 자동 취소됩니다.
+                  위 계좌로 입금해주세요. 입금이 확인되면 순차적으로 출고됩니다.
                 </p>
               </div>
             )}

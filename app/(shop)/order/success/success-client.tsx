@@ -54,8 +54,7 @@ export default function SuccessClient() {
             <CheckCircle2 className="size-10 text-brand-mint" />
             <h1 className="text-lg font-semibold">주문이 접수되었습니다</h1>
             <p className="text-sm text-muted-foreground">
-              아래 계좌로 <strong>6시간 이내</strong> 입금해주세요. 입금 확인 후
-              출고됩니다.
+              아래 계좌로 입금해주세요. 입금 확인 후 출고됩니다.
             </p>
           </div>
 

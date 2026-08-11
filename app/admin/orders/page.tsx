@@ -10,16 +10,13 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/components/auth/auth-provider";
 import { listAllOrders } from "@/lib/admin";
-import {
-  cleanupExpiredOrdersAction,
-} from "@/lib/actions/checkout";
 import { formatPriceKRW } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { ShopOrder, ShopOrderStatus } from "@/types";
 
 const STATUS_OPTIONS: { value: ShopOrderStatus | "all"; label: string }[] = [
   { value: "all", label: "전체" },
-  { value: "pending", label: "결제 대기" },
+  { value: "pending", label: "주문 접수" },
   { value: "paid", label: "결제 완료" },
   { value: "preparing", label: "배송 준비" },
   { value: "shipped", label: "배송 중" },
@@ -29,7 +26,7 @@ const STATUS_OPTIONS: { value: ShopOrderStatus | "all"; label: string }[] = [
 ];
 
 const STATUS_LABEL: Record<ShopOrderStatus, string> = {
-  pending: "결제 대기",
+  pending: "주문 접수",
   paid: "결제 완료",
   preparing: "배송 준비",
   shipped: "배송 중",
@@ -48,30 +45,16 @@ const STATUS_COLOR: Record<ShopOrderStatus, string> = {
   refunded: "bg-destructive/15 text-destructive",
 };
 
-function formatRemaining(ms: number): string {
-  if (ms <= 0) return "만료";
-  const h = Math.floor(ms / 3600_000);
-  const m = Math.floor((ms % 3600_000) / 60_000);
-  return `${h}시간 ${m}분`;
-}
-
 export default function AdminOrdersPage() {
   const { user } = useAuth();
   const [orders, setOrders] = useState<ShopOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("");
   const [status, setStatus] = useState<ShopOrderStatus | "all">("all");
-  const [now, setNow] = useState(Date.now());
 
-  // 페이지 진입 시 한 번 만료 정리 → 그 후 목록 로드
   useEffect(() => {
     let cancelled = false;
     async function run() {
-      try {
-        await cleanupExpiredOrdersAction();
-      } catch {
-        /* noop */
-      }
       const list = await listAllOrders();
       if (!cancelled) {
         setOrders(list);
@@ -82,12 +65,6 @@ export default function AdminOrdersPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
-
-  // 카운트다운 갱신용 1분 timer
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 60_000);
-    return () => clearInterval(t);
   }, []);
 
   const filtered = useMemo(() => {
@@ -110,7 +87,7 @@ export default function AdminOrdersPage() {
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
       <h1 className="text-2xl font-bold tracking-tight">주문 관리</h1>
       <p className="mt-1 text-sm text-muted-foreground">
-        결제 대기 주문은 6시간 이후 자동 취소됩니다. 주문 상태 관리는 ERP에서 통합적으로 수행합니다.
+        주문이 접수되면 ERP에 자동으로 &ldquo;접수대기&rdquo;로 등록됩니다. 입금 확인·주문 상태 관리는 ERP에서 통합적으로 수행합니다.
       </p>
 
       <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -172,9 +149,6 @@ export default function AdminOrdersPage() {
                 </thead>
                 <tbody className="divide-y">
                   {filtered.map((o) => {
-                    const expiresMs = o.expiresAt
-                      ? o.expiresAt.toMillis() - now
-                      : 0;
                     const isPending = o.status === "pending";
                     return (
                       <tr key={o.id}>
@@ -212,14 +186,8 @@ export default function AdminOrdersPage() {
                         </td>
                         <td className="py-3 pr-2 text-xs">
                           {isPending ? (
-                            <span
-                              className={cn(
-                                expiresMs < 60 * 60_000
-                                  ? "text-destructive"
-                                  : "text-muted-foreground",
-                              )}
-                            >
-                              남은시간 {formatRemaining(expiresMs)}
+                            <span className="text-muted-foreground">
+                              입금 확인 대기 (ERP)
                             </span>
                           ) : o.trackingNumber ? (
                             <span className="text-foreground/80">

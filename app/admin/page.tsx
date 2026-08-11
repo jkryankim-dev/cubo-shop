@@ -21,7 +21,7 @@ import { formatPriceKRW } from "@/lib/format";
 import type { ShopOrder } from "@/types";
 
 const STATUS_LABEL: Record<ShopOrder["status"], string> = {
-  pending: "결제 대기",
+  pending: "주문 접수",
   paid: "결제 완료",
   preparing: "배송 준비",
   shipped: "배송 중",
